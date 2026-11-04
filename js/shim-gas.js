@@ -132,6 +132,22 @@
             nominal: +p.nominal, metode: p.metode, kasir: p.kasir, keterangan: p.keterangan
           });
 
+          const mapAset = a => ({
+              idAset: a.id_aset,
+              nama: a.nama,
+              kategori: a.kategori,
+              tanggalPerolehan: new Date(a.tanggal_perolehan).getTime(),
+              nilaiPerolehan: +a.nilai_perolehan,
+              nilaiResidu: +a.nilai_residu,
+              masaManfaat: a.masa_manfaat,
+              akumPenyusutan: +a.akum_penyusutan,
+              nbv: (+a.nilai_perolehan) - (+a.akum_penyusutan),
+              lokasi: a.lokasi,
+              keterangan: a.keterangan,
+              sumberDana: a.sumber_dana,
+              status: a.status
+            });
+
           const currentShift = shifts.data[0] ? {
             id: shifts.data[0].id, modalAwal: +shifts.data[0].modal_awal,
             waktuBuka: new Date(shifts.data[0].waktu_buka).getTime()
@@ -164,7 +180,7 @@
             currentShift,
             saldoRingkas: saldo,
             pembayaranHutang: (ph.data||[]).map(mapPH),
-            asetTetap: aset.data || []
+            asetTetap: (aset.data||[]).map(mapAset)
           };
         })());
         return runner;
