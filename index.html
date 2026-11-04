@@ -9683,7 +9683,7 @@
             reader.onload = function(e) {
                 var text = e.target.result;
                 
-                // Deteksi otomatis pemisah (koma , atau titik koma ;)
+                // Deteksi otomatis pemisah
                 var firstLine = text.split(/\r\n|\n/)[0] || '';
                 var delimiter = ',';
                 if (firstLine.includes(';')) delimiter = ';';
@@ -9693,7 +9693,7 @@
                 var dataToUpload = [];
                 var startRow = 0;
 
-                // Cari letak baris header yang sebenarnya (mengandung "ID" dan "NAMA")
+                // Cari baris header
                 for (var h = 0; h < lines.length; h++) {
                     var upper = lines[h].toUpperCase();
                     if (upper.includes('ID') && upper.includes('NAMA')) {
@@ -9702,14 +9702,33 @@
                     }
                 }
 
-                // Mulai baca data dari baris setelah header
+                // Fungsi Helper untuk memperbaiki notasi ilmiah (8,99E+12 menjadi 899...)
+                function fixScientificNotation(val) {
+                    if (!val) return "";
+                    val = String(val).replace(/["']/g, '').trim();
+                    // Jika ada 'E+' dan koma/titik, itu format notasi ilmiah
+                    if (/E\+/i.test(val)) {
+                        // Ubah koma ke titik untuk perhitungan JS
+                        var num = parseFloat(val.replace(',', '.'));
+                        if (!isNaN(num)) {
+                            // toFixed(0) akan mengembalikan format angka utuh
+                            return num.toFixed(0); 
+                        }
+                    }
+                    return val;
+                }
+
                 for (var i = startRow; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue; // Lewati baris kosong
+                    if (!lines[i].trim()) continue; 
                     
                     var cols = parseCSVLine(lines[i], delimiter);
                     
                     if (cols.length >= 6) {
-                        var id       = cols[0].replace(/["']/g, '').trim();
+                        // Perbaiki ID jika terlanjur jadi notasi ilmiah
+                        var id       = fixScientificNotation(cols[0]);
+                        // Hapus karakter aneh seperti ="123"
+                        id = id.replace(/=|\"/g, '').trim();
+
                         var nama     = cols[1].replace(/["']/g, '').trim();
                         var kategori = cols[2].replace(/["']/g, '').trim();
                         var hargaBeli = parseRupiahCSV(cols[3]);
@@ -9775,7 +9794,7 @@
                         }
                     });
                 } else {
-                    Swal.fire('Format Salah', 'File tidak memiliki data yang sesuai. Pastikan urutan kolom: ID, Nama, Kategori, Harga Beli, Harga Jual, Stok, Online.', 'error');
+                    Swal.fire('Format Salah', 'File tidak memiliki data yang sesuai.', 'error');
                     event.target.value = '';
                 }
             };
