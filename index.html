@@ -6,22 +6,18 @@
     <title>De Krit Pro v7.19 - Online</title>
 	<link rel="icon" href="data:,">
     
-    <!-- Library Eksternal -->
-	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-	<script src="js/supabase-client.js"></script>
-	<script src="js/shim-gas.js"></script>
+     <!-- 1. Library Eksternal (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-	<link rel="stylesheet" href="css/style.css">
-	
-    <!-- Custom CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     
+    <!-- 2. Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
 </head>
 
 <!-- Layout Utama -->
@@ -4021,5 +4017,13 @@
             </div>
         </div>
     </div>
+	<!-- 3. Koneksi Database & Adapter -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/shim-gas.js"></script>
+
+    <!-- 4. Logika Aplikasi Anda -->
+    <script src="js/app.js"></script>
+    <script src="js/sidebar.js"></script>	
 </body>
 </html>
