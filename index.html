@@ -9657,15 +9657,16 @@
             return parseInt(m[1].replace(/\./g, ''), 10) || 0;
         }
 
-        // Helper: Split baris CSV dengan benar (handle quoted values)
-        function parseCSVLine(line) {
+        // 1. UPDATE FUNGSI INI AGAR MENDUKUNG PEMISAH ; ATAU ,
+        function parseCSVLine(line, delimiter) {
+            delimiter = delimiter || ',';
             var result = [], cur = '', inQuote = false;
             for (var i = 0; i < line.length; i++) {
                 var ch = line[i];
                 if (ch === '"') {
                     if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
                     else { inQuote = !inQuote; }
-                } else if (ch === ',' && !inQuote) {
+                } else if (ch === delimiter && !inQuote) {
                     result.push(cur); cur = '';
                 } else {
                     cur += ch;
@@ -9675,6 +9676,7 @@
             return result;
         }
 
+        // 2. UPDATE FUNGSI UPLOAD AGAR OTOMATIS MELEWATI BARIS JUDUL
         function handleBulkUpload(event) {
             var file = event.target.files[0];
             if (!file) return;
@@ -9683,28 +9685,47 @@
             var reader = new FileReader();
             reader.onload = function(e) {
                 var text = e.target.result;
+                
+                // Deteksi otomatis pemisah (koma , atau titik koma ;)
+                var firstLine = text.split(/\r\n|\n/)[0] || '';
+                var delimiter = ',';
+                if (firstLine.includes(';')) delimiter = ';';
+                else if (firstLine.includes('\t')) delimiter = '\t';
+
                 var lines = text.split(/\r\n|\n/);
                 var dataToUpload = [];
+                var startRow = 0;
 
-                for (var i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    var cols = parseCSVLine(lines[i]);
+                // Cari letak baris header yang sebenarnya (mengandung "ID" dan "NAMA")
+                for (var h = 0; h < lines.length; h++) {
+                    var upper = lines[h].toUpperCase();
+                    if (upper.includes('ID') && upper.includes('NAMA')) {
+                        startRow = h + 1;
+                        break;
+                    }
+                }
+
+                // Mulai baca data dari baris setelah header
+                for (var i = startRow; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue; // Lewati baris kosong
+                    
+                    var cols = parseCSVLine(lines[i], delimiter);
+                    
                     if (cols.length >= 6) {
                         var id       = cols[0].replace(/["']/g, '').trim();
                         var nama     = cols[1].replace(/["']/g, '').trim();
                         var kategori = cols[2].replace(/["']/g, '').trim();
                         var hargaBeli = parseRupiahCSV(cols[3]);
-                        var hargaJual = parseRupiahCSV(cols[4]);   // ← handle "Rp 2.000Mgn: 25.0%"
+                        var hargaJual = parseRupiahCSV(cols[4]);
                         var stok     = parseInt(String(cols[5] || '').replace(/\D/g, ''), 10) || 0;
 
-                        // Baca kolom ke-7 (Online) — support "Ya"/"Tdk"/"TRUE"/"FALSE"
-                        var jualOnline = true; // default: true
+                        var jualOnline = true;
                         if (cols[6] !== undefined) {
                             var s = String(cols[6]).replace(/["']/g, '').trim().toLowerCase();
                             jualOnline = (s === 'ya' || s === 'yes' || s === 'true' || s === '1');
                         }
 
-                        if (id && nama) {
+                        if (id && nama && id.toUpperCase() !== 'ID') {
                             dataToUpload.push({
                                 id: id, nama: nama, kategori: kategori,
                                 hargaBeli: hargaBeli, hargaJual: hargaJual,
@@ -9715,7 +9736,6 @@
                 }
 
                 if (dataToUpload.length > 0) {
-                    // [PATCH v7.19 #6] Pilihan sumber stok untuk jurnal yang benar
                     Swal.fire({
                         title: 'Upload Masal',
                         width: 520,
@@ -9729,10 +9749,6 @@
                                     '<option value="BANK">🏦 Beli Transfer dari Bank (D 113 / K 115)</option>' +
                                     '<option value="HUTANG">📝 Beli Kredit dari Supplier (D 113 / K 211)</option>' +
                                 '</select>' +
-                                '<p class="text-[10px] text-slate-400 mt-2">' +
-                                    '<i class="fas fa-info-circle mr-1"></i>' +
-                                    'Jurnal otomatis dibuat dengan nilai = Σ(harga beli × stok baru).' +
-                                '</p>' +
                             '</div>',
                         icon: 'info',
                         showCancelButton: true,
@@ -9762,7 +9778,7 @@
                         }
                     });
                 } else {
-                    Swal.fire('Format Salah', 'Format file salah atau kosong. Pastikan urutan Kolom: ID, Nama, Kategori, Harga Beli, Harga Jual, Stok, Online.', 'error');
+                    Swal.fire('Format Salah', 'File tidak memiliki data yang sesuai. Pastikan urutan kolom: ID, Nama, Kategori, Harga Beli, Harga Jual, Stok, Online.', 'error');
                     event.target.value = '';
                 }
             };
