@@ -21,6 +21,7 @@
       withSuccessHandler(cb) { _onSuccess = cb; return runner; },
       withFailureHandler(cb) { _onFail = cb; return runner; },
 
+      // ── AUTH ──
       loginApp(username, password) {
         dispatch((async () => {
           const email = username.includes('@') ? username : `${username}@pos.local`;
@@ -39,6 +40,7 @@
         return runner;
       },
 
+      // ── INIT DATA ──
       getInitialData() {
         dispatch((async () => {
           const { data: { user } } = await supabaseClient.auth.getUser();
@@ -65,7 +67,6 @@
           const setup = {};
           (settings.data || []).forEach(s => { setup[s.key] = s.value; });
 
-          // Fallback aman jika profil belum ada di tabel
           const pData = profile.data || {};
           const userObj = { 
             nama: pData.nama || 'Admin', 
@@ -126,6 +127,7 @@
         return runner;
       },
 
+      // ── TRANSAKSI & KASIR ──
       saveTransaction(_token, tx, cart) {
         dispatch((async () => {
           const { data, error } = await supabaseClient.rpc('rpc_save_transaction', { payload: tx, cart });
@@ -148,6 +150,15 @@
       deleteProduct(_token, id) {
         dispatch((async () => {
           const { error } = await supabaseClient.from('products').update({ is_deleted: true }).eq('id', id);
+          if (error) throw error;
+          return { success: true };
+        })());
+        return runner;
+      },
+      
+      restoreProduct(_token, id) {
+        dispatch((async () => {
+          const { error } = await supabaseClient.from('products').update({ is_deleted: false }).eq('id', id);
           if (error) throw error;
           return { success: true };
         })());
@@ -181,6 +192,16 @@
         return runner;
       },
 
+      deleteBeban(_token, id) {
+        dispatch((async () => {
+          const { error } = await supabaseClient.from('expenses').delete().eq('id', id);
+          if (error) throw error;
+          return { success: true };
+        })());
+        return runner;
+      },
+
+      // ── SETUP ──
       saveSetup(_token, d) {
         dispatch((async () => {
           const rows = Object.keys(d).map(k => ({ key: k, value: d[k] }));
@@ -191,6 +212,7 @@
         return runner;
       },
 
+      // ── ONLINE ORDERS ──
       submitOnlineOrder(payload) {
         dispatch((async () => {
           const orderId = 'ONL-' + Date.now();
@@ -229,27 +251,84 @@
         return runner;
       },
 
-      saveUserAccount(_t, p) {
+      // ── ASET TETAP ──
+      getAsetTetapList(_t) {
         dispatch((async () => {
-          if (p.isEdit) {
-            const { error } = await supabaseClient.from('profiles').update({ nama: p.nama, role: p.role }).eq('username', p.username);
+          const { data, error } = await supabaseClient.from('aset_tetap').select('*');
+          if (error) throw error;
+          const mapAset = a => ({
+            idAset: a.id_aset, nama: a.nama, kategori: a.kategori,
+            tanggalPerolehan: new Date(a.tanggal_perolehan).getTime(),
+            nilaiPerolehan: +a.nilai_perolehan, nilaiResidu: +a.nilai_residu,
+            masaManfaat: a.masa_manfaat, akumPenyusutan: +a.akum_penyusutan,
+            nbv: (+a.nilai_perolehan) - (+a.akum_penyusutan),
+            lokasi: a.lokasi, keterangan: a.keterangan, sumberDana: a.sumber_dana, status: a.status
+          });
+          const mapped = (data || []).map(mapAset);
+          const totalAset = mapped.reduce((s, a) => s + a.nilaiPerolehan, 0);
+          const totalAkum = mapped.reduce((s, a) => s + a.akumPenyusutan, 0);
+          const totalNbv = mapped.reduce((s, a) => s + a.nbv, 0);
+          return { success: true, data: mapped, totalAset, totalAkum, totalNbv };
+        })());
+        return runner;
+      },
+      
+      saveAsetTetap(_t, p) {
+        dispatch((async () => {
+          const row = {
+            id_aset: p.idAset || ('AST-' + Date.now()),
+            nama: p.nama,
+            kategori: p.kategori,
+            tanggal_perolehan: new Date(p.tanggalPerolehan).toISOString(),
+            nilai_perolehan: p.nilaiPerolehan,
+            nilai_residu: p.nilaiResidu,
+            masa_manfaat: p.masaManfaat,
+            lokasi: p.lokasi,
+            keterangan: p.keterangan,
+            sumber_dana: p.sumberDana
+          };
+          if (p.isNew) {
+            const { error } = await supabaseClient.from('aset_tetap').insert(row);
             if (error) throw error;
-            return { success: true };
+          } else {
+            const { error } = await supabaseClient.from('aset_tetap').update(row).eq('id_aset', p.idAset);
+            if (error) throw error;
           }
-          return { success: false, error: 'Buat user baru via Supabase Auth Dashboard' };
+          return { success: true };
         })());
         return runner;
       },
 
-      deleteUserAccount(_t, username) {
+      disposeAsetTetap(_t, p) {
         dispatch((async () => {
-          const { error } = await supabaseClient.from('profiles').update({ is_active: false }).eq('username', username);
+          const { error } = await supabaseClient.from('aset_tetap').update({
+            status: 'DISPOSED',
+            tanggal_disposal: new Date(p.tanggalDisposal).toISOString(),
+            nilai_jual: p.nilaiJual
+          }).eq('id_aset', p.idAset);
           if (error) throw error;
           return { success: true };
         })());
         return runner;
       },
 
+      jalankanPenyusutanBulanan(_t, periode) {
+        dispatch((async () => {
+          // Stub: Anggap sukses. (Bisa dikembangkan nanti menggunakan RPC di Supabase)
+          return { success: true, totalPenyusutan: 0, jumlahAset: 0, message: 'Fitur penyusutan otomatis dalam pengembangan.' };
+        })());
+        return runner;
+      },
+
+      getRiwayatPenyusutan(_t) {
+        dispatch((async () => {
+          // Stub: return array kosong agar tabel tidak crash
+          return { success: true, data: [] };
+        })());
+        return runner;
+      },
+
+      // ── BKU (BUKU KAS UMUM) ──
       saveBukuKasUmum(_t, p) {
         dispatch((async () => {
           const id = 'BKU-' + Date.now();
@@ -261,19 +340,87 @@
         return runner;
       },
 
-      // Stubs
-      saveBulkPembelian() { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      saveBulkProducts()  { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      lunasiKasbon()      { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      processReturn()     { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      cancelRestock()     { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      saveOpname()        { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      saveTarikTunai()    { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      saveProdukDigital() { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      saveTopUpEwallet()  { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
+      updateBukuKasUmum(_t, id, p) {
+        dispatch((async () => {
+          const { error } = await supabaseClient.from('bku').update({
+            tanggal: new Date(p.tanggal).toISOString(), no_bukti: p.noBukti, jenis: p.jenis, kategori: p.kategori, uraian: p.uraian, metode: p.metode,
+            debit: p.jenis === 'Pemasukan' ? p.nominal : 0, kredit: p.jenis === 'Pengeluaran' ? p.nominal : 0
+          }).eq('id', id);
+          if (error) throw error;
+          return { success: true, tanggal: new Date(p.tanggal).getTime(), kasir: 'Admin' };
+        })());
+        return runner;
+      },
+      
+      deleteBukuKasUmum(_t, id) {
+        dispatch((async () => {
+          const { error } = await supabaseClient.from('bku').delete().eq('id', id);
+          if (error) throw error;
+          return { success: true };
+        })());
+        return runner;
+      },
+
+      // ── PEMBAYARAN HUTANG ──
+      getPembayaranHutangHistory(_t, refNota) {
+        dispatch((async () => {
+          const { data, error } = await supabaseClient.from('pembayaran_hutang').select('*').eq('ref_nota', refNota);
+          if (error) throw error;
+          const mapped = (data || []).map(p => ({
+            id: p.id, refNota: p.ref_nota, tanggal: new Date(p.tanggal).getTime(),
+            nominal: +p.nominal, metode: p.metode, kasir: p.kasir, keterangan: p.keterangan
+          }));
+          return { success: true, data: mapped };
+        })());
+        return runner;
+      },
+
+      savePembayaranHutang(_t, p) {
+        dispatch((async () => {
+          const id = 'PH-' + Date.now();
+          const { data: { user } } = await supabaseClient.auth.getUser();
+          const { error } = await supabaseClient.from('pembayaran_hutang').insert({
+            id, ref_nota: p.refNota, tanggal: new Date().toISOString(),
+            nominal: p.nominal, metode: p.metode, kasir: user?.email || 'Admin', keterangan: p.keterangan
+          });
+          if (error) throw error;
+          return { success: true, payId: id, isLunas: false }; // Simplified stub
+        })());
+        return runner;
+      },
+
+      // ── LAYANAN DIGITAL ──
+      getLayananDetail(_t, id) {
+        dispatch((async () => {
+          const { data, error } = await supabaseClient.from('layanan_digital').select('*').eq('id', id).single();
+          if (error) throw error;
+          return { success: true, data: { ...data, tanggal: new Date(data.tanggal).getTime() } };
+        })());
+        return runner;
+      },
+
+      processReturnLayanan(_t, id) {
+        dispatch((async () => {
+          const { error } = await supabaseClient.from('layanan_digital').delete().eq('id', id);
+          if (error) throw error;
+          return { success: true };
+        })());
+        return runner;
+      },
+
+      // ── STUBS LAINNYA (Mencegah Error if Called) ──
+      saveBulkPembelian() { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      saveBulkProducts()  { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      lunasiKasbon()      { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      processReturn()     { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      cancelRestock()     { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      saveOpname()        { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      saveTarikTunai()    { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      saveProdukDigital() { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      saveTopUpEwallet()  { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
       getSaldoGoPay()     { dispatch((async()=>({success:true,bank:0,transit:0,deposit:0}))()); return runner; },
-      rekonsiliasiSettlementGoPay() { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
-      topUpDepositGoPay() { dispatch((async()=>({success:false,error:'TODO'}))()); return runner; },
+      rekonsiliasiSettlementGoPay() { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      topUpDepositGoPay() { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
     };
 
     return runner;
