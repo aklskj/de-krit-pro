@@ -12913,11 +12913,7 @@
         });
         _anSetHtml('an-compare-tbody', html);
     }
-    </script>
-    <script>
-    /* ============================================================ */
-    /* [PATCH v7.14] SIDEBAR ACCORDION + MINIMIZE + FLYOUT + USER MENU */
-    /* ============================================================ */
+    
 	// [SARAN #2] Update badge sidebar dinamis
     function updateSidebarBadges() {
         // 1. Badge stok tipis (<=5)
