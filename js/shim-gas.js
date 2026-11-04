@@ -77,7 +77,7 @@
           ]);
 
           const setup = {};
-          (settings.data || []).forEach(s => { setup[s.key] = typeof s.value === 'string' ? JSON.parse(s.value) : s.value; });
+          (settings.data || []).forEach(s => { setup[s.key] = s.value; });
 
           // Map snake_case → camelCase (sesuai state app lama)
           const mapProd = p => ({
