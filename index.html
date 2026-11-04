@@ -5362,47 +5362,6 @@
 
     <!-- ================== JAVASCRIPT ================== -->
     <script>
-        // --- POLYFILL UNTUK LOCAL DEMO ---
-        if (typeof google === 'undefined') {
-            console.warn("⚠️ Menjalankan Mode Demo Offline karena backend Google Apps Script tidak terdeteksi.");
-            window.google = {
-                script: {
-                    run: {
-                        withSuccessHandler: function(cb) { this.successCb = cb; return this; },
-                        withFailureHandler: function(cb) { this.failureCb = cb; return this; },
-                        loginApp: function(u, p) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, token: 'demo-token'}); }, 500); },
-                        getInitialData: function(token) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({ success: true, user: { nama: 'Admin Demo', role: 'Admin' }, setup: { 'Nama Toko': 'Demo Offline', 'Midtrans Server Key': '', 'Midtrans Env': 'Sandbox' }, products: [{id:'D01', nama:'Kopi Susu Demo', kategori:'Minuman', hargaBeli:5000, hargaJual:15000, stok: 50, jualOnline: true}], transactions: [], purchases: [], beban: [], logs: [], currentShift: null }); }, 500); },
-                        logoutApp: function() { },
-                        saveProduct: function(token, data) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, id: data.id || ('P' + Date.now())}); }, 500); },
-                        deleteProduct: function(token, id) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true}); }, 500); },
-                        restoreProduct: function(token, id) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true}); }, 500); },
-                        saveTransaction: function(token, tx, cart) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, pdfLink: '#'}); }, 500); },
-                        openShift: function(t, m) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, shift: { modalAwal: m, waktuBuka: Date.now() }}); }, 500); },
-                        closeShift: function(t, m) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true}); }, 500); },
-                        saveSetup: function(t, d) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true}); }, 500); },
-                        saveOpname: function(t, d) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true}); }, 500); },
-                        saveBeban: function(t, d) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, newId: 'B'+Date.now(), tanggal: Date.now(), kasir: 'Admin'}); }, 500); },
-                        saveBulkPembelian: function(t, cart, sup) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, newPurchases: []}); }, 500); },
-                        saveBulkProducts: function(t, data) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true}); }, 500); },
-                        lunasiKasbon: function(t, id) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, wa_respon: 'Demo: Pelunasan Sukses'}); }, 500); },
-                        processReturn: function(t, id) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true}); }, 500); },
-                        cancelRestock: function(t, id) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, newHpp: 0}); }, 500); },
-                        checkQRISStatus: function(token, orderId) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({ success: true, status: 'settlement', isPaid: true }); }, 2000); },
-                        submitOnlineOrder: function(payload) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({ success: true, orderId: 'ONL-DEMO-123' }); }, 1000); },
-                        getPendingOrders: function() { var self = this; setTimeout(function() { if(self.successCb) self.successCb({ success: true, data: [] }); }, 1000); },
-                        processOnlineOrder: function(token, orderId) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({ success: true }); }, 1000); },
-                        cancelOnlineOrder: function(token, orderId) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({ success: true }); }, 1000); },
-                        saveTarikTunai: function(t, d) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, id: 'TARIK-DEMO', fee: 2000, uangFisik: (d.nominal||0)-2000, tanggal: Date.now(), kasir: 'Demo', nominal: d.nominal, modal: 0, metode: 'QRIS', keterangan: 'Demo', jenis: 'TARIK_TUNAI'}); }, 500); },
-                        saveProdukDigital: function(t, d) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, id: 'DIGI-DEMO', fee: (d.hargaJual||0)-(d.hargaModal||0), tanggal: Date.now(), kasir: 'Demo', nominal: d.hargaJual, modal: d.hargaModal, metode: d.metode||'Tunai', keterangan: d.nama, jenis: 'PRODUK_DIGITAL'}); }, 500); },
-                        catatJurnalSelisihKas: function(t, uf, ks) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, message: 'Demo mode', jurnalDibuat: false, selisih: 0}); }, 500); },
-                        getSaldoGoPay: function(t) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, transit: 0, deposit: 0, bank: 0}); }, 500); },
-                        rekonsiliasiSettlementGoPay: function(t, n) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, id: 'SETTLE-DEMO'}); }, 500); },
-                        topUpDepositGoPay: function(t, n) { var self = this; setTimeout(function() { if(self.successCb) self.successCb({success: true, id: 'TOPUP-DEMO'}); }, 500); }
-                    }
-                }
-            };
-        }
-
         function toggleMobileSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');
