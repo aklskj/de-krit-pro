@@ -6222,39 +6222,36 @@
                 return;
             }
 
-            var html = '<table>';
-            // Judul
-            html += '<tr><td colspan="7" class="hdr-title">DATA INVENTORI</td></tr>';
-            html += '<tr><td colspan="7" class="hdr-sub">' + escapeHtml(state.setup['Nama Toko'] || 'Toko') + ' — ' + new Date().toLocaleString('id-ID') + '</td></tr>';
-            html += '<tr><td colspan="7"></td></tr>';
-
-            // Header kolom
-            html += '<tr>' +
-                        '<td class="hdr-col">ID</td>' +
-                        '<td class="hdr-col">Nama Produk</td>' +
-                        '<td class="hdr-col">Kategori</td>' +
-                        '<td class="hdr-col">Harga Beli</td>' +
-                        '<td class="hdr-col">Harga Jual</td>' +
-                        '<td class="hdr-col">Stok</td>' +
-                        '<td class="hdr-col">Jual Online</td>' +
-                    '</tr>';
-
-            // Data
+            // Gunakan CSV murni, bukan HTML Table agar ID tidak rusak
+            var csvContent = "ID,Nama Produk,Kategori,Harga Beli,Harga Jual,Stok,Jual Online\n";
+            
             for (var i = 0; i < state.products.length; i++) {
                 var p = state.products[i];
-                html += '<tr>' +
-                            '<td class="lbl">' + excelSafe(String(p.id || '')) + '</td>' +
-                            '<td class="lbl">' + excelSafe(String(p.nama || '')) + '</td>' +
-                            '<td class="lbl">' + excelSafe(String(p.kategori || '')) + '</td>' +
-                            '<td class="num">' + (Number(p.hargaBeli) || 0) + '</td>' +
-                            '<td class="num">' + (Number(p.hargaJual) || 0) + '</td>' +
-                            '<td class="num">' + (Number(p.stok) || 0) + '</td>' +
-                            '<td class="lbl">' + (p.jualOnline ? 'Ya' : 'Tidak') + '</td>' +
-                        '</tr>';
+                // Bungkus ID dengan tanda kutip (="...") agar Excel membacanya sebagai Teks, bukan Angka
+                var safeId = '="' + String(p.id).replace(/"/g, '""') + '"';
+                var safeNama = '"' + String(p.nama).replace(/"/g, '""') + '"';
+                var safeKategori = '"' + String(p.kategori).replace(/"/g, '""') + '"';
+                var onlineStr = p.jualOnline ? 'Ya' : 'Tidak';
+                
+                csvContent += safeId + "," + 
+                              safeNama + "," + 
+                              safeKategori + "," + 
+                              p.hargaBeli + "," + 
+                              p.hargaJual + "," + 
+                              p.stok + "," + 
+                              onlineStr + "\n";
             }
-            html += '</table>';
 
-            exportToExcel(html, 'Data_Inventori');
+            var blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = 'Data_Inventori_' + toLocalDateStr(new Date()) + '.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+            showToast('File CSV berhasil diunduh', 'success');
         }
 
 		    document.addEventListener('DOMContentLoaded', function() { 
