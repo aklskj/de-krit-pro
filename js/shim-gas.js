@@ -410,7 +410,17 @@
 
       // ── STUBS LAINNYA (Mencegah Error if Called) ──
       saveBulkPembelian() { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
-      saveBulkProducts()  { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      saveBulkProducts(_token, data, source) {
+        dispatch((async () => {
+          const { data: res, error } = await supabaseClient.rpc('rpc_save_bulk_products', {
+            p_data: data,
+            p_source: source || 'MODAL'
+          });
+          if (error) throw error;
+          return res; // Akan mengembalikan { success: true, count: 142 }
+        })());
+        return runner;
+      },
       lunasiKasbon()      { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
       processReturn()     { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
       cancelRestock()     { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
