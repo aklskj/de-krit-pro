@@ -265,13 +265,13 @@
       // ─────────────────────────────────────────────────────
       saveSetup(_token, d) {
         dispatch((async () => {
-          const rows = Object.keys(d).map(k => ({ key: k, value: JSON.stringify(d[k]) }));
+          const rows = Object.keys(d).map(k => ({ key: k, value: d[k] })); // <-- Kirim nilai asli
           const { error } = await supabaseClient.from('settings').upsert(rows);
           if (error) throw error;
           return { success: true };
         })());
         return runner;
-      },
+      }
 
       // ─────────────────────────────────────────────────────
       // ONLINE ORDERS
