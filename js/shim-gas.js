@@ -139,9 +139,54 @@
 
       saveProduct(_token, d) {
         dispatch((async () => {
-          const row = { id: d.id, nama: d.nama, kategori: d.kategori, harga_beli: d.hargaBeli, harga_jual: d.hargaJual, stok: d.stok, image: d.image, jual_online: d.jualOnline };
+          let finalImageUrl = d.image; // Default: link lama atau base64
+      
+          // Cek apakah user mengupload gambar baru (formatnya Base64)
+          if (d.image && d.image.startsWith('data:image')) {
+            try {
+              // 1. Ubah Base64 menjadi File (Blob)
+              const base64Data = d.image.split(',')[1];
+              const byteCharacters = atob(base64Data);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], {type: 'image/jpeg'});
+      
+              // 2. Buat nama file unik
+              const fileName = `prod-${Date.now()}.jpg`;
+      
+              // 3. Upload ke Supabase Storage (bucket 'products')
+              const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('products')
+                .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+      
+              if (uploadError) throw uploadError;
+      
+              // 4. Ambil Link URL Publik dari file yang diupload
+              const { data: urlData } = supabaseClient.storage
+                .from('products')
+                .getPublicUrl(fileName);
+                
+              finalImageUrl = urlData.publicUrl; // Simpan URL ini ke database
+      
+            } catch (err) {
+              console.error("Gagal upload gambar ke Storage:", err);
+              // Jika gagal upload, tetap simpan Base64 (tapi tidak disarankan)
+            }
+          }
+      
+          // Simpan data ke tabel products (pakai URL dari Storage)
+          const row = {
+            id: d.id, nama: d.nama, kategori: d.kategori,
+            harga_beli: d.hargaBeli, harga_jual: d.hargaJual,
+            stok: d.stok, image: finalImageUrl, jual_online: d.jualOnline
+          };
+          
           const { error } = await supabaseClient.from('products').upsert(row);
           if (error) throw error;
+          
           return { success: true, id: d.id };
         })());
         return runner;
