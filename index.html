@@ -6473,22 +6473,39 @@
             }
         });
 		
-		    function handleLogin(e) {
-            e.preventDefault(); 
-            var btn = document.getElementById('btn-login'); 
-            var err = document.getElementById('log-error'); 
-            if (btn.disabled) return;   // ← [PATCH] cegah double click
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Memproses...'; btn.disabled = true; err.classList.add('hidden');
-            
-            if (typeof google !== 'undefined' && google.script) {
-                google.script.run.withSuccessHandler(function(res) { 
-                    if(res.success) { storageManager.set('pos_token_final', res.token); document.getElementById('login-screen').classList.add('hidden'); btn.innerText = 'Masuk Sekarang'; btn.disabled = false; initializeAppSystem(); } 
-                    else { err.innerText = res.message; err.classList.remove('hidden'); btn.innerText = 'Masuk Sekarang'; btn.disabled = false; } 
-                }).withFailureHandler(function() { err.innerText = "Gagal terhubung."; err.classList.remove('hidden'); btn.innerText = 'Masuk Sekarang'; btn.disabled = false; }).loginApp(document.getElementById('log-user').value, document.getElementById('log-pass').value);
-            } else {
-                err.innerText = "Lingkungan Google tidak ditemukan."; err.classList.remove('hidden'); btn.innerText = 'Masuk Sekarang'; btn.disabled = false;
-            }
-        }
+		function handleLogin(e) {
+		    e.preventDefault();
+		    var btn = document.getElementById('btn-login');
+		    var err = document.getElementById('log-error');
+		    if (btn.disabled) return;
+		    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Memproses...';
+		    btn.disabled = true;
+		    err.classList.add('hidden');
+		
+		    // Shim loginApp sudah handle konversi username → email
+		    google.script.run
+		      .withSuccessHandler(function(res) {
+		        if (res.success) {
+		            storageManager.set('pos_token_final', res.token);
+		            document.getElementById('login-screen').classList.add('hidden');
+		            btn.innerText = 'Masuk Sekarang'; btn.disabled = false;
+		            initializeAppSystem();
+		        } else {
+		            err.innerText = res.message;
+		            err.classList.remove('hidden');
+		            btn.innerText = 'Masuk Sekarang'; btn.disabled = false;
+		        }
+		      })
+		      .withFailureHandler(function(err2) {
+		        err.innerText = 'Koneksi gagal: ' + (err2?.message || '');
+		        err.classList.remove('hidden');
+		        btn.innerText = 'Masuk Sekarang'; btn.disabled = false;
+		      })
+		      .loginApp(
+		        document.getElementById('log-user').value,
+		        document.getElementById('log-pass').value
+		      );
+		}
         
         function handleLogout() { 
             if(state.currentShift) { return Swal.fire('Shift Masih Buka', 'Silakan Tutup Kasir terlebih dahulu sebelum keluar (Logout).', 'warning'); }
