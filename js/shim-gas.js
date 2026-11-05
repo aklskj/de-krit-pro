@@ -43,84 +43,70 @@
       // ── INIT DATA ──
       async getInitialData() {
         const sb = window.supabaseClient;
-        const { data: { user } } = await sb.auth.getUser();
-        if (!user) throw new Error('Not authenticated');
-      
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        const since = sevenDaysAgo.toISOString();
-        const today = new Date().toISOString().split('T')[0];
-      
-        // Load paralel — semua query KECIL & WAJIB
-        const [
-          profileRes,
-          settingsRes,
-          productsRes,
-          shiftRes,
-          onlineOrdersRes,
-          asetRes,
-          dashboardRes,
-          recentTxRes,
-          recentJournalsRes,
-          recentExpensesRes,
-          recentPurchasesRes,
-          recentLayananRes
-        ] = await Promise.all([
-          sb.from('profiles').select('id, username, nama, role, is_active').eq('id', user.id).single(),
-          sb.from('settings').select('key, value'),
-          sb.from('products').select('id, nama, kategori, harga_beli, harga_jual, stok, image, jual_online')
-            .eq('is_deleted', false).order('nama'),
-          sb.from('shifts')
-            .select('id, kasir_id, kasir_nama, modal_awal, modal_source, waktu_buka, status')
-            .eq('kasir_id', user.id).eq('status', 'OPEN').maybeSingle(),
-          sb.from('online_orders')
-            .select('order_id, nama, wa, waktu_ambil, total, cart, metode, tanggal, status')
-            .eq('status', 'PENDING').order('tanggal', { ascending: false }).limit(100),
-          sb.from('aset_tetap')
-            .select('id_aset, nama, kategori, tanggal_perolehan, nilai_perolehan, nilai_residu, masa_manfaat, akum_penyusutan, lokasi, status')
-            .eq('status', 'AKTIF'),
-          sb.rpc('get_dashboard_summary', { p_tanggal: today }),
-          // Riwayat ringkas 7 hari terakhir saja (bukan 5000 baris full)
-          sb.from('transactions')
-            .select('id, tanggal, kasir, pelanggan, total, modal, laba, diskon, metode, status, shift_id')
-            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(2000),
-          sb.from('journals')
-            .select('id, id_jurnal, tanggal, ref_id, keterangan, kode_akun, nama_akun, debit, kredit, shift_id')
-            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(3000),
-          sb.from('expenses')
-            .select('id, tanggal, kasir, kategori, keterangan, nominal, shift_id')
-            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(300),
-          sb.from('purchases')
-            .select('id, id_produk, nama_produk, qty, harga_beli, total_biaya, tanggal, supplier, metode, ref_nota, shift_id')
-            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(300),
-          sb.from('layanan_digital')
-            .select('id, tanggal, kasir, jenis, nominal, modal, fee, metode, keterangan, shift_id')
-            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(300)
-        ]);
-      
-        // Cek error sekali
-        const errors = [profileRes, settingsRes, productsRes, shiftRes, onlineOrdersRes, asetRes,
-                        dashboardRes, recentTxRes, recentJournalsRes, recentExpensesRes,
-                        recentPurchasesRes, recentLayananRes]
-          .filter(r => r && r.error);
-        if (errors.length) console.warn('[getInitialData] warnings:', errors.map(e => e.error));
-      
-        return {
-          profile:         profileRes.data,
-          settings:        settingsRes.data || [],
-          products:        productsRes.data || [],
-          shift:           shiftRes.data || null,
-          onlineOrders:    onlineOrdersRes.data || [],
-          asetTetap:       asetRes.data || [],
-          dashboard:       dashboardRes.data || {},
-          transactions:    recentTxRes.data || [],
-          journals:        recentJournalsRes.data || [],
-          expenses:        recentExpensesRes.data || [],
-          purchases:       recentPurchasesRes.data || [],
-          layananDigital:  recentLayananRes.data || [],
-          // Flags untuk lazy loader
-          _journalsFullLoaded: false,
-          _transactionsFullLoaded: false
+        console.log('[Shim] Fetching getInitialData...');
+        
+        try {
+          const { data: { user }, error: authErr } = await sb.auth.getUser();
+          if (authErr || !user) throw new Error('Not authenticated');
+
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          const since = sevenDaysAgo.toISOString();
+          const today = new Date().toISOString().split('T')[0];
+
+          console.log('[Shim] Executing Promise.all queries...');
+
+          // Tambahkan timeout 15 detik agar tidak menggantung selamanya
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout: Supabase query hang')), 15000)
+          );
+
+          const dataPromise = Promise.all([
+            sb.from('profiles').select('id, username, nama, role, is_active').eq('id', user.id).single(),
+            sb.from('settings').select('key, value'),
+            sb.from('products').select('id, nama, kategori, harga_beli, harga_jual, stok, image, jual_online').eq('is_deleted', false).order('nama'),
+            sb.from('shifts').select('id, kasir_id, kasir_nama, modal_awal, modal_source, waktu_buka, status').eq('kasir_id', user.id).eq('status', 'OPEN').maybeSingle(),
+            sb.from('online_orders').select('order_id, nama, wa, waktu_ambil, total, cart, metode, tanggal, status').eq('status', 'PENDING').order('tanggal', { ascending: false }).limit(100),
+            sb.from('aset_tetap').select('id_aset, nama, kategori, tanggal_perolehan, nilai_perolehan, nilai_residu, masa_manfaat, akum_penyusutan, lokasi, status').eq('status', 'AKTIF'),
+            sb.rpc('get_dashboard_summary', { p_tanggal: today }),
+            sb.from('transactions').select('id, tanggal, kasir, pelanggan, total, modal, laba, diskon, metode, status, shift_id').gte('tanggal', since).order('tanggal', { ascending: false }).limit(2000),
+            sb.from('journals').select('id, id_jurnal, tanggal, ref_id, keterangan, kode_akun, nama_akun, debit, kredit, shift_id').gte('tanggal', since).order('tanggal', { ascending: false }).limit(3000),
+            sb.from('expenses').select('id, tanggal, kasir, kategori, keterangan, nominal, shift_id').gte('tanggal', since).order('tanggal', { ascending: false }).limit(300),
+            sb.from('purchases').select('id, id_produk, nama_produk, qty, harga_beli, total_biaya, tanggal, supplier, metode, ref_nota, shift_id').gte('tanggal', since).order('tanggal', { ascending: false }).limit(300),
+            sb.from('layanan_digital').select('id, tanggal, kasir, jenis, nominal, modal, fee, metode, keterangan, shift_id').gte('tanggal', since).order('tanggal', { ascending: false }).limit(300)
+          ]);
+
+          // Jalankan dengan timeout
+          const results = await Promise.race([dataPromise, timeoutPromise]);
+
+          const [
+            profileRes, settingsRes, productsRes, shiftRes, onlineOrdersRes, asetRes,
+            dashboardRes, recentTxRes, recentJournalsRes, recentExpensesRes, recentPurchasesRes, recentLayananRes
+          ] = results;
+
+          const errors = results.filter(r => r && r.error);
+          if (errors.length) console.warn('[Shim] Query warnings:', errors.map(e => e.error));
+
+          console.log('[Shim] Data fetched successfully.');
+          return {
+            profile:         profileRes?.data || null,
+            settings:        settingsRes?.data || [],
+            products:        productsRes?.data || [],
+            shift:           shiftRes?.data || null,
+            onlineOrders:    onlineOrdersRes?.data || [],
+            asetTetap:       asetRes?.data || [],
+            dashboard:       dashboardRes?.data || {},
+            transactions:    recentTxRes?.data || [],
+            journals:        recentJournalsRes?.data || [],
+            expenses:        recentExpensesRes?.data || [],
+            purchases:       recentPurchasesRes?.data || [],
+            layananDigital:  recentLayananRes?.data || [],
+            _journalsFullLoaded: false,
+            _transactionsFullLoaded: false
+          };
+        } catch (err) {
+          console.error('[Shim] Fatal Error in getInitialData:', err);
+          throw err; // Lempar ke failureHandler di app.js
         }
       },
       
