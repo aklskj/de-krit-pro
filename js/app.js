@@ -1591,16 +1591,19 @@
                 _loadSaldoRingkas();
                 
             } catch (err) {
-                console.error("InitApp Error: ", err);
-                var loader = document.getElementById('initial-loader');
-                loader.style.display = 'flex';
-                loader.innerHTML = 
-                    '<div class="text-red-500 mb-4"><i class="fas fa-exclamation-triangle text-4xl"></i></div>' +
-                    '<p class="font-extrabold text-slate-700">Sistem Gagal Memuat</p>' +
-                    '<p class="text-xs font-bold text-slate-500 mt-2 max-w-xs">' + escapeHtml(err.message) + '</p>' +
-                    '<p class="text-[10px] font-mono text-slate-400 mt-2 max-w-xs">' + escapeHtml(err.stack || '').substring(0, 200) + '</p>' +
-                    '<button onclick="window.location.reload()" class="mt-5 bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md">Muat Ulang Halaman</button>';
-            }
+	            console.error("InitApp Error: ", err);
+	            var loader = document.getElementById('initial-loader');
+	            if (loader) {
+	                loader.style.display = 'flex';
+	                loader.innerHTML = 
+	                    '<div class="text-red-500 mb-4"><i class="fas fa-exclamation-triangle text-4xl"></i></div>' +
+	                    '<p class="font-extrabold text-slate-700">Sistem Gagal Memuat</p>' +
+	                    '<p class="text-xs font-bold text-slate-500 mt-2 max-w-xs">' + (err.message || 'Unknown error') + '</p>' +
+	                    '<button onclick="window.location.reload()" class="mt-5 bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md">Muat Ulang Halaman</button>';
+	            } else {
+	                alert('Sistem Gagal Memuat: ' + err.message);
+	            }
+	        }
         }
 
         // [FIX] Global last sync timestamp
