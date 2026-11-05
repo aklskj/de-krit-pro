@@ -4018,8 +4018,8 @@
 				    wa: custWA, 
 				    diskon: disc, 
 				    pelanggan: custName,
-				    kasir: state.user.nama,
-				    tanggal: new Date().toISOString()
+				    kasir: state.user.nama, // ← TAMBAHKAN INI
+				    status: (state.paymentMethod === 'Kasbon' ? 'HUTANG' : 'SUKSES') // ← TAMBAHKAN INI
 				};
                 var cartPayload = [];
                 for(var j=0; j<state.cart.length; j++) {
