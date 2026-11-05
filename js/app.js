@@ -4006,7 +4006,21 @@
                 var btnConfirm = document.getElementById('btn-confirm-pay');
                 btnConfirm.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Memproses...'; btnConfirm.disabled = true;
 
-                var txData = { id: 'TRX' + new Date().getTime(), itemDesc: itemDescArr.join(', '), total: tFinal, modal: tB, laba: tFinal - tB, metode: state.paymentMethod, bayar: bayar, kembali: bayar > tFinal ? bayar - tFinal : 0, wa: custWA, diskon: disc, pelanggan: custName };
+                var txData = { 
+				    id: 'TRX' + new Date().getTime(), 
+				    itemDesc: itemDescArr.join(', '), 
+				    total: tFinal, 
+				    modal: tB, 
+				    laba: tFinal - tB, 
+				    metode: state.paymentMethod, 
+				    bayar: bayar, 
+				    kembali: bayar > tFinal ? bayar - tFinal : 0, 
+				    wa: custWA, 
+				    diskon: disc, 
+				    pelanggan: custName,
+				    kasir: state.user.nama,
+				    tanggal: new Date().toISOString()
+				};
                 var cartPayload = [];
                 for(var j=0; j<state.cart.length; j++) {
                     var cItem = state.cart[j];
