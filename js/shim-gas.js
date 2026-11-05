@@ -14,8 +14,8 @@
           console.error('[Shim] Error:', err);
           if (_onFail) _onFail(err);
           else Swal.fire('Error', err.message || 'Unknown error', 'error');
-        });
-    }
+        })
+    },
 
     const runner = {
       withSuccessHandler(cb) { _onSuccess = cb; return runner; },
@@ -41,9 +41,7 @@
       },
 
       // ── INIT DATA ──
-      // getInitialData — versi optimized
-      // Prinsip: load ringan dulu, lazy load data besar
-      async function getInitialData() {
+      async getInitialData() {
         const sb = window.supabaseClient;
         const { data: { user } } = await sb.auth.getUser();
         if (!user) throw new Error('Not authenticated');
@@ -123,13 +121,10 @@
           // Flags untuk lazy loader
           _journalsFullLoaded: false,
           _transactionsFullLoaded: false
-        };
-      }
+        }
+      },
       
-      // ============================================================
-      // Lazy loader: panggil saat user buka menu laporan/riwayat penuh
-      // ============================================================
-      async function loadAllJournals(p_from, p_to) {
+      async loadAllJournals(p_from, p_to) {
         const sb = window.supabaseClient;
         const PAGE = 1000;
         let all = [];
@@ -150,17 +145,17 @@
           if (offset > 200000) break;
         }
         return all;
-      }
+      },
       
       // Paginated fetch (untuk infinite scroll)
-      async function loadJournalsPage({ offset = 0, limit = 100, from, to } = {}) {
+      async loadJournalsPage({ offset = 0, limit = 100, from, to } = {}) {
         const sb = window.supabaseClient;
         const { data, error } = await sb.rpc('get_journals_paginated', {
           p_offset: offset, p_limit: limit, p_from: from || null, p_to: to || null
         });
         if (error) throw error;
         return { rows: data || [], total: data?.[0]?.total_count ?? 0 };
-      }
+      },
 
       getDataSince(_token, _since) {
         dispatch((async () => {
