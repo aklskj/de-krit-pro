@@ -15,7 +15,7 @@
           if (_onFail) _onFail(err);
           else Swal.fire('Error', err.message || 'Unknown error', 'error');
         })
-    },
+    }
 
     const runner = {
       withSuccessHandler(cb) { _onSuccess = cb; return runner; },
