@@ -1305,67 +1305,149 @@
         }
 
 		// ═══════════════════════════════════════════════════════════════
-		// [PATCH v7.20] ADAPTER — Normalisasi output shim baru ke shape lama
-		// Supaya semua kode lama (initApp, manualSync, render*) tidak perlu diubah.
-		// ═══════════════════════════════════════════════════════════════
-		function _normalizeInitialData(res) {
-		    if (!res) return null;
-		
-		    // 1. Konversi settings (array of {key, value}) → objek
-		    var setupObj = {};
-		    if (res.setup && typeof res.setup === 'object' && !Array.isArray(res.setup)) {
-		        setupObj = res.setup;
-		    } else if (Array.isArray(res.settings)) {
-		        for (var i = 0; i < res.settings.length; i++) {
-		            var s = res.settings[i];
-		            if (s && s.key !== undefined) setupObj[s.key] = s.value;
-		        }
-		    }
-		
-		    // 2. Konversi profil Supabase → shape state.user lama
-		    var u = res.profile || res.user || null;
-		    var userMapped = null;
-		    if (u) {
-		        userMapped = {
-		            id:       u.id,
-		            username: u.username,
-		            nama:     u.nama,
-		            role:     u.role,
-		            is_active:u.is_active
-		        };
-		    }
-		
-		    return {
-		        // ─── Field langsung (sama nama) ───
-		        products:       res.products || [],
-		        transactions:   res.transactions || [],
-		        purchases:      res.purchases || [],
-		        onlineOrders:   res.onlineOrders || [],
-		        layananDigital: res.layananDigital || [],
-		        asetTetap:      res.asetTetap || [],
-		        dashboard:      res.dashboard || {},
-		        currentShift:   res.shift || res.currentShift || null,
-		
-		        // ─── Field yang di-rename ───
-		        user:  userMapped,
-		        setup: setupObj,
-		        jurnal: res.journals || res.jurnal || [],
-		        beban:  res.expenses || res.beban  || [],
-		
-		        // ─── Field yang mungkin belum dikirim shim (fallback) ───
-		        logs:             res.logs             || [],
-		        users:            res.users            || [],
-		        bku:              res.bku              || [],
-		        pembayaranHutang: res.pembayaranHutang || [],
-		        saldoRingkas:     res.saldoRingkas     || { kas111: 0, bank115: 0, piutang112: 0, hutang211: 0 },
-		
-		        // ─── Flag kompatibilitas ───
-		        success: true,
-		        deltaSync: false,
-		        _journalsFullLoaded: res._journalsFullLoaded || false,
-		        _transactionsFullLoaded: res._transactionsFullLoaded || false
-		    };
-		}
+        // [PATCH FIX NaN] ADAPTER — Normalisasi output shim ke shape lama
+        // ═══════════════════════════════════════════════════════════════
+        function _normalizeInitialData(res) {
+            if (!res) return null;
+
+            // 1. Konversi settings (array of {key, value}) → objek
+            var setupObj = {};
+            if (res.setup && typeof res.setup === 'object' && !Array.isArray(res.setup)) {
+                setupObj = res.setup;
+            } else if (Array.isArray(res.settings)) {
+                for (var i = 0; i < res.settings.length; i++) {
+                    var s = res.settings[i];
+                    if (s && s.key !== undefined) setupObj[s.key] = s.value;
+                }
+            }
+
+            // 2. Konversi profil Supabase → shape state.user lama
+            var u = res.profile || res.user || null;
+            var userMapped = null;
+            if (u) {
+                userMapped = {
+                    id:       u.id,
+                    username: u.username,
+                    nama:     u.nama,
+                    role:     u.role,
+                    is_active:u.is_active
+                };
+            }
+
+            // 3. Mapping SHIFT
+            var shiftData = res.shift || res.currentShift || null;
+            var shiftMapped = null;
+            if (shiftData) {
+                shiftMapped = {
+                    id:          shiftData.id,
+                    kasirId:     shiftData.kasir_id,
+                    kasirNama:   shiftData.kasir_nama,
+                    modalAwal:   Number(shiftData.modal_awal) || 0,
+                    modalSource: shiftData.modal_source,
+                    waktuBuka:   new Date(shiftData.waktu_buka).getTime(),
+                    waktuTutup:  shiftData.waktu_tutup ? new Date(shiftData.waktu_tutup).getTime() : null,
+                    kasFisik:    Number(shiftData.kas_fisik) || 0,
+                    selisih:     Number(shiftData.selisih) || 0,
+                    status:      shiftData.status
+                };
+            }
+
+            // 4. Mapping PRODUCTS
+            var productsMapped = (res.products || []).map(function(p) {
+                return {
+                    id: p.id, nama: p.nama, kategori: p.kategori,
+                    hargaBeli: Number(p.harga_beli) || 0,
+                    hargaJual: Number(p.harga_jual) || 0,
+                    stok: Number(p.stok) || 0,
+                    image: p.image,
+                    jualOnline: p.jual_online
+                };
+            });
+
+            // 5. Mapping TRANSACTIONS
+            var txMapped = (res.transactions || []).map(function(t) {
+                return {
+                    id: t.id, tanggal: new Date(t.tanggal).getTime(),
+                    kasirId: t.kasir_id, kasir: t.kasir, pelanggan: t.pelanggan, wa: t.wa,
+                    item: t.item_desc, total: Number(t.total) || 0, modal: Number(t.modal) || 0,
+                    laba: Number(t.laba) || 0, diskon: Number(t.diskon) || 0, metode: t.metode,
+                    bayar: Number(t.bayar) || 0, kembali: Number(t.kembali) || 0, status: t.status,
+                    cartJson: typeof t.cart_json === 'string' ? t.cart_json : JSON.stringify(t.cart_json || []),
+                    pdfLink: t.pdf_link, shiftId: t.shift_id
+                };
+            });
+
+            // 6. Mapping PURCHASES
+            var purchasesMapped = (res.purchases || []).map(function(p) {
+                return {
+                    id: p.id, idProduk: p.id_produk, namaProduk: p.nama_produk, qty: Number(p.qty) || 0,
+                    hargaBeli: Number(p.harga_beli) || 0, totalBiaya: Number(p.total_biaya) || 0,
+                    tanggal: new Date(p.tanggal).getTime(), supplier: p.supplier, metode: p.metode,
+                    refNota: p.ref_nota, kasir: p.kasir, shiftId: p.shift_id
+                };
+            });
+
+            // 7. Mapping JOURNALS
+            var jurnalMapped = (res.journals || res.jurnal || []).map(function(j) {
+                return {
+                    id: j.id, idJurnal: j.id_jurnal, tanggal: new Date(j.tanggal).getTime(),
+                    refId: j.ref_id, keterangan: j.keterangan, kodeAkun: j.kode_akun,
+                    namaAkun: j.nama_akun, debit: Number(j.debit) || 0, kredit: Number(j.kredit) || 0,
+                    shiftId: j.shift_id
+                };
+            });
+
+            // 8. Mapping EXPENSES
+            var expensesMapped = (res.expenses || res.beban || []).map(function(e) {
+                return {
+                    id: e.id, tanggal: new Date(e.tanggal).getTime(), kasir: e.kasir,
+                    kategori: e.kategori, keterangan: e.keterangan, nominal: Number(e.nominal) || 0,
+                    shiftId: e.shift_id
+                };
+            });
+
+            // 9. Mapping LAYANAN DIGITAL
+            var layananMapped = (res.layananDigital || []).map(function(l) {
+                return {
+                    id: l.id, tanggal: new Date(l.tanggal).getTime(), kasir: l.kasir,
+                    jenis: l.jenis, nominal: Number(l.nominal) || 0, modal: Number(l.modal) || 0,
+                    fee: Number(l.fee) || 0, metode: l.metode, keterangan: l.keterangan, shiftId: l.shift_id
+                };
+            });
+
+            // 10. Mapping ONLINE ORDERS
+            var onlineMapped = (res.onlineOrders || []).map(function(o) {
+                return {
+                    orderId: o.order_id, nama: o.nama, wa: o.wa, waktuAmbil: o.waktu_ambil,
+                    total: Number(o.total) || 0, cart: o.cart, metode: o.metode,
+                    tanggal: new Date(o.tanggal).getTime(), status: o.status
+                };
+            });
+
+            return {
+                products:       productsMapped,
+                transactions:   txMapped,
+                purchases:      purchasesMapped,
+                onlineOrders:   onlineMapped,
+                layananDigital: layananMapped,
+                asetTetap:      res.asetTetap || [],
+                dashboard:      res.dashboard || {},
+                currentShift:   shiftMapped,
+                user:           userMapped,
+                setup:          setupObj,
+                jurnal:         jurnalMapped,
+                beban:          expensesMapped,
+                logs:           res.logs || [],
+                users:          res.users || [],
+                bku:            res.bku || [],
+                pembayaranHutang: res.pembayaranHutang || [],
+                saldoRingkas:   res.saldoRingkas || { kas111: 0, bank115: 0, piutang112: 0, hutang211: 0 },
+                success:        true,
+                deltaSync:      false,
+                _journalsFullLoaded: res._journalsFullLoaded || false,
+                _transactionsFullLoaded: res._transactionsFullLoaded || false
+            };
+        }
 
 		var _suppFetchInProgress = false;
 		var _suppFetchLastRun    = 0;
