@@ -478,7 +478,19 @@
       },
 
       // ── STUBS LAINNYA (Mencegah Error if Called) ──
-      saveBulkPembelian() { dispatch((async()=>({success:false,error:'Fitur belum tersedia di Supabase'}))()); return runner; },
+      saveBulkPembelian(_token, cartData, supplier, metode, dpVal) {
+        dispatch((async () => {
+          const { data, error } = await supabaseClient.rpc('rpc_save_bulk_purchase', {
+             p_cart: cartData,
+             p_supplier: supplier,
+             p_metode: metode,
+             p_dp: dpVal || 0
+          });
+          if (error) throw error;
+          return data;
+        })());
+        return runner;
+      },
       saveBulkProducts(_token, data, source) {
         dispatch((async () => {
           const { data: res, error } = await supabaseClient.rpc('rpc_save_bulk_products', {
