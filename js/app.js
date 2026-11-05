@@ -4692,18 +4692,15 @@
               var d = Number(j.debit)  || 0;
               var k = Number(j.kredit) || 0;
               var tgl = j.tanggal;
-
-              // ══════ SNAPSHOT (kumulatif sampai endTime) ══════
-              if (tgl <= endTime) {
-                  if      (kode === '111') m.kas          += (d - k);
-                  else if (kode === '112') m.piutang      += (d - k);
-                  else if (kode === '113') m.persediaan   += (d - k);
-                  else if (kode === '115') m.bank         += (d - k);
-                  else if (kode === '116') m.transit      += (d - k);
-                  else if (kode === '117') m.deposit      += (d - k);
-                  else if (kode === '211') m.hutang       += (k - d);
-                  else if (kode === '212') m.hutangPinjaman += (k - d);
-              }
+			  var _sb = state._saldoByAccount || {};
+				m.kas            = Number(_sb['111']) || 0;
+				m.piutang        = Number(_sb['112']) || 0;
+				m.persediaan     = Number(_sb['113']) || 0;
+				m.bank           = Number(_sb['115']) || 0;
+				m.transit        = Number(_sb['116']) || 0;
+				m.deposit        = Number(_sb['117']) || 0;
+				m.hutang         = Math.abs(Number(_sb['211']) || 0);
+				m.hutangPinjaman = Math.abs(Number(_sb['212']) || 0);
 
               // ══════ PERIODE (hanya yang dalam rentang) ══════
               if (tgl < startTime || tgl > endTime) continue;
@@ -5591,23 +5588,13 @@
                 isKasKeluar = false;
             }
 
-            if (isKasKeluar) {
-                var saldoKas = 0;
-                for (var i = 0; i < state.jurnal.length; i++) {
-                    if (String(state.jurnal[i].kodeAkun).trim() === '111') {
-                        saldoKas += (state.jurnal[i].debit || 0) - (state.jurnal[i].kredit || 0);
-                    }
-                }
-                if (nominal > saldoKas) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Saldo Kas Tidak Cukup!',
-                        html: 'Anda mencoba mengeluarkan <b>' + formatRp(nominal) + '</b>,<br>sementara sisa Kas Toko hanya <b>' + formatRp(saldoKas) + '</b>.',
-                        confirmButtonColor: '#3b82f6'
-                    });
-                    return;
-                }
-            }
+            // ✅ GANTI dengan:
+			if (isKasKeluar) {
+			    var saldoKas =
+			        (state._saldoByAccount && Number(state._saldoByAccount['111'])) ||
+			        (Number(state.saldoRingkas.kas111) || 0);
+			    if (nominal > saldoKas) { /* reject */ }
+			}
 
             // ── Inner function untuk eksekusi simpan ──
             function _doSaveBeban() {
@@ -6337,29 +6324,29 @@
             cutoffDate.setHours(23, 59, 59, 999);
             var cutoffTime = cutoffDate.getTime();
 
-            for (var i = 0; i < state.jurnal.length; i++) {
-                var j = state.jurnal[i];
-                if (j.tanggal > cutoffTime) continue;
-                var d = j.debit || 0;
-                var k = j.kredit || 0;
-                var akun = String(j.kodeAkun).trim();
-
-                if (akun === '111') totalKas += (d - k);
-                else if (akun === '115') bankQris += (d - k);
-                else if (akun === '116') piutangGopay += (d - k);
-                else if (akun === '117') depositGopay += (d - k);
-                else if (akun === '112') piutang += (d - k);
-                else if (akun === '113') persediaan += (d - k);
-                else if (akun === '114') perlengkapan += (d - k);
-                else if (akun === '121') asetTetap += (d - k);
-                else if (akun === '122') akumPenyusutan += (k - d);
-                else if (akun === '211') hutangDagang += (k - d);
-                else if (akun === '212') hutangPinjaman += (k - d);
-                else if (akun === '311') modalTambahan += (k - d);
-                else if (akun === '312') labaDitahanPermanen += (k - d);
-                else if (akun.startsWith('4')) labaDitahan += (k - d);
-                else if (akun.startsWith('5')) labaDitahan -= (d - k);
-            }
+            // ✅ GANTI blok for loop dengan:
+			var _sb = state._saldoByAccount || {};
+			var totalKas       = Number(_sb['111']) || 0;
+			var bankQris       = Number(_sb['115']) || 0;
+			var piutangGopay   = Number(_sb['116']) || 0;
+			var depositGopay   = Number(_sb['117']) || 0;
+			var piutang        = Number(_sb['112']) || 0;
+			var persediaan     = Number(_sb['113']) || 0;
+			var perlengkapan   = Number(_sb['114']) || 0;
+			var asetTetap      = Number(_sb['121']) || 0;
+			var akumPenyusutan = Math.abs(Number(_sb['122']) || 0);
+			var hutangDagang   = Math.abs(Number(_sb['211']) || 0);
+			var hutangPinjaman = Math.abs(Number(_sb['212']) || 0);
+			var modalTambahan  = Math.abs(Number(_sb['311']) || 0);
+			var labaDitahanPermanen = Math.abs(Number(_sb['312']) || 0);
+			
+			// Laba tahun berjalan = -(total 4xx + total 5xx)
+			var total4 = 0, total5 = 0;
+			for (var _k in _sb) {
+			    if (_k.startsWith('4')) total4 += Number(_sb[_k]) || 0;
+			    else if (_k.startsWith('5')) total5 += Number(_sb[_k]) || 0;
+			}
+			var labaDitahan = -(total4 + total5);
 
             // [PATCH A7] Cross-check persediaan dari tabel produk
             var persediaanFisik = 0;
@@ -8041,23 +8028,15 @@
             var dKas = 0, dPiutang = 0, dHutang = 0, dPersediaan = 0;
             var dBank = 0, dTransit = 0, dDeposit = 0;   // [NEW]
 
-            if(state.jurnal) {
-                for(var jn=0; jn<state.jurnal.length; jn++) {
-                    var jData = state.jurnal[jn];
-                    var akun = String(jData.kodeAkun).trim();
-                    var deb = jData.debit || 0;
-                    var kre = jData.kredit || 0;
-                    
-                    if (akun === '111') dKas += (deb - kre);
-                    else if (akun === '112') dPiutang += (deb - kre);
-                    else if (akun === '211') dHutang += (kre - deb);
-                    else if (akun === '113') dPersediaan += (deb - kre);
-                    // [NEW] 3 akun baru untuk Layanan Digital
-                    else if (akun === '115') dBank += (deb - kre);
-                    else if (akun === '116') dTransit += (deb - kre);
-                    else if (akun === '117') dDeposit += (deb - kre);
-                }
-            }
+            // ✅ GANTI dengan lookup langsung
+			var _sb = state._saldoByAccount || {};
+			var dKas        = Number(_sb['111']) || 0;
+			var dPiutang    = Number(_sb['112']) || 0;
+			var dHutang     = -(Number(_sb['211']) || 0);   // normal kredit
+			var dPersediaan = Number(_sb['113']) || 0;
+			var dBank       = Number(_sb['115']) || 0;
+			var dTransit    = Number(_sb['116']) || 0;
+			var dDeposit    = Number(_sb['117']) || 0;
 
             // Render widget lama
             if(document.getElementById('dash-kas'))        document.getElementById('dash-kas').innerText = formatRp(dKas);
@@ -8481,20 +8460,11 @@
                 
                 var isAdmin = !!(state.user && state.user.role === 'Admin');
                 var saldoSumber;
-                if (isAdmin && state.jurnal && state.jurnal.length > 0) {
-                    // Admin: hitung dari jurnal penuh
-                    saldoSumber = 0;
-                    for(var i=0; i<state.jurnal.length; i++) {
-                        if(String(state.jurnal[i].kodeAkun).trim() === kodeAkun) {
-                            saldoSumber += (state.jurnal[i].debit || 0) - (state.jurnal[i].kredit || 0);
-                        }
-                    }
-                } else {
-                    // Kasir: gunakan saldoRingkas dari server
-                    saldoSumber = (kodeAkun === '111')
-                        ? ((state.saldoRingkas && Number(state.saldoRingkas.kas111)) || 0)
-                        : ((state.saldoRingkas && Number(state.saldoRingkas.bank115)) || 0);
-                }
+                // ✅ GANTI dengan:
+				var saldoSumber =
+				    (state._saldoByAccount && Number(state._saldoByAccount[kodeAkun])) ||
+				    (kodeAkun === '111' ? (Number(state.saldoRingkas.kas111) || 0)
+				                        : (Number(state.saldoRingkas.bank115) || 0));
                 
                 if (totalBiayaRestock > saldoSumber) {
                     Swal.fire({
@@ -9504,15 +9474,6 @@
       }
 		}
 
-    // ═══════════════════════════════════════════════════════════════
-    // [PATCH v7.19] printDailyFullReport — SIMPLIFIED
-    // Alur LAMA: input fisik LACI → pilih "Cetak Saja" / "Cetak + Jurnal"
-    //   ❌ Basis LACI, tapi jurnal meng-adjust 111 (termasuk brangkas)
-    //   ❌ Sering double-jurnal dengan closeShift
-    // Alur BARU: input fisik LACI (info) → cetak
-    //   ✅ Jurnal selisih per shift otomatis dari closeShift
-    //   ✅ Rekonsiliasi 111 total pakai fitur terpisah (openRekonKasTotalModal)
-    // ═══════════════════════════════════════════════════════════════
     function printDailyFullReport() {
         var today = new Date().toDateString();
         var todayDate = new Date();
@@ -9546,12 +9507,9 @@
             : '';
 
         // Hitung saldo 111 sistem (informasi)
-        var saldo111 = 0;
-        for (var j = 0; j < state.jurnal.length; j++) {
-            if (String(state.jurnal[j].kodeAkun).trim() === '111') {
-                saldo111 += (state.jurnal[j].debit || 0) - (state.jurnal[j].kredit || 0);
-            }
-        }
+        var saldo111 =
+		    (state._saldoByAccount && Number(state._saldoByAccount['111'])) ||
+		    (Number(state.saldoRingkas.kas111) || 0);
 
         Swal.fire({
             title: shiftIsMultiDay ? '💰 Cetak Laporan Shift Aktif' : '💰 Cetak Laporan Harian',
@@ -10166,12 +10124,10 @@
         if (feeEl) feeEl.innerText = formatRp(fee);
 
         // Hitung saldo Bank dari jurnal lokal
-        var saldoBank = 0;
-        for (var i = 0; i < state.jurnal.length; i++) {
-            if (String(state.jurnal[i].kodeAkun).trim() === '115') {
-                saldoBank += (state.jurnal[i].debit || 0) - (state.jurnal[i].kredit || 0);
-            }
-        }
+        var saldoBank =
+		    (state._saldoByAccount && Number(state._saldoByAccount['115'])) ||
+		    (Number(state.saldoRingkas.bank115) || 0);
+		
         var bankEl = document.getElementById('ml-topup-bank');
         if (bankEl) {
             var warna = (nominal > saldoBank) ? 'text-red-600' : 'text-orange-600';
@@ -10882,12 +10838,9 @@
         }
 
         // 5. Piutang GoPay belum di-settle
-        var transit = 0;
-        for (var i = 0; i < state.jurnal.length; i++) {
-            if (String(state.jurnal[i].kodeAkun).trim() === '116') {
-                transit += (state.jurnal[i].debit || 0) - (state.jurnal[i].kredit || 0);
-            }
-        }
+        var transit =
+    		(state._saldoByAccount && Number(state._saldoByAccount['116'])) || 0;
+		
         if (transit >= 500000) {
             notifs.push({
                 id: 'transit',
@@ -11516,21 +11469,16 @@
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
     // [PATCH v7.19] Modal REKONSILIASI KAS TOTAL (111)
-    // ═══════════════════════════════════════════════════════════════
     function openRekonKasTotalModal() {
         if (!state.user || state.user.role !== 'Admin') {
             return showToast('Hanya Admin!', 'error');
         }
 
         // Saldo 111 sistem (kumulatif)
-        var saldo111 = 0;
-        for (var i = 0; i < state.jurnal.length; i++) {
-            if (String(state.jurnal[i].kodeAkun).trim() === '111') {
-                saldo111 += (state.jurnal[i].debit || 0) - (state.jurnal[i].kredit || 0);
-            }
-        }
+        var saldo111 =
+		    (state._saldoByAccount && Number(state._saldoByAccount['111'])) ||
+		    (Number(state.saldoRingkas.kas111) || 0);
 
         Swal.fire({
             title: '<i class="fas fa-coins text-amber-500 mr-2"></i>Rekonsiliasi Kas Total',
@@ -11645,20 +11593,15 @@
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════
     // [PATCH v7.19] Modal REKONSILIASI BANK (115)
-    // ═══════════════════════════════════════════════════════════════
     function openRekonBankModal() {
         if (!state.user || state.user.role !== 'Admin') {
             return showToast('Hanya Admin!', 'error');
         }
 
-        var saldo115 = 0;
-        for (var i = 0; i < state.jurnal.length; i++) {
-            if (String(state.jurnal[i].kodeAkun).trim() === '115') {
-                saldo115 += (state.jurnal[i].debit || 0) - (state.jurnal[i].kredit || 0);
-            }
-        }
+        var saldo115 =
+		    (state._saldoByAccount && Number(state._saldoByAccount['115'])) ||
+		    (Number(state.saldoRingkas.bank115) || 0);
 
         Swal.fire({
             title: '<i class="fas fa-university text-cyan-500 mr-2"></i>Rekonsiliasi Bank',
