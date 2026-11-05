@@ -85,10 +85,10 @@
           // Riwayat ringkas 7 hari terakhir saja (bukan 5000 baris full)
           sb.from('transactions')
             .select('id, tanggal, kasir, pelanggan, total, modal, laba, diskon, metode, status, shift_id')
-            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(500),
+            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(2000),
           sb.from('journals')
             .select('id, id_jurnal, tanggal, ref_id, keterangan, kode_akun, nama_akun, debit, kredit, shift_id')
-            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(1000),
+            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(3000),
           sb.from('expenses')
             .select('id, tanggal, kasir, kategori, keterangan, nominal, shift_id')
             .gte('tanggal', since).order('tanggal', { ascending: false }).limit(300),
