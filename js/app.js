@@ -4684,15 +4684,7 @@
               piutang: 0, persediaan: 0,
               hutang: 0, hutangPinjaman: 0
           };
-
-          var jurnal = state.jurnal || [];
-          for (var i = 0; i < jurnal.length; i++) {
-              var j = jurnal[i];
-              var kode = String(j.kodeAkun).trim();
-              var d = Number(j.debit)  || 0;
-              var k = Number(j.kredit) || 0;
-              var tgl = j.tanggal;
-			  var _sb = state._saldoByAccount || {};
+			var _sb = state._saldoByAccount || {};
 				m.kas            = Number(_sb['111']) || 0;
 				m.piutang        = Number(_sb['112']) || 0;
 				m.persediaan     = Number(_sb['113']) || 0;
@@ -4701,7 +4693,15 @@
 				m.deposit        = Number(_sb['117']) || 0;
 				m.hutang         = Math.abs(Number(_sb['211']) || 0);
 				m.hutangPinjaman = Math.abs(Number(_sb['212']) || 0);
-
+			
+			var jurnal = state.jurnal || [];
+			for (var i = 0; i < jurnal.length; i++) {
+              var j = jurnal[i];
+              var kode = String(j.kodeAkun).trim();
+              var d = Number(j.debit)  || 0;
+              var k = Number(j.kredit) || 0;
+              var tgl = j.tanggal;
+			  
               // ══════ PERIODE (hanya yang dalam rentang) ══════
               if (tgl < startTime || tgl > endTime) continue;
 
@@ -8025,14 +8025,11 @@
 
             // 1. Kalkulasi Akuntansi Real-time (Kas, Piutang, Hutang, Persediaan)
             // [v7.19] KALKULASI AKUNTANSI REAL-TIME
-            var dKas = 0, dPiutang = 0, dHutang = 0, dPersediaan = 0;
-            var dBank = 0, dTransit = 0, dDeposit = 0;   // [NEW]
-
             // ✅ GANTI dengan lookup langsung
 			var _sb = state._saldoByAccount || {};
 			var dKas        = Number(_sb['111']) || 0;
 			var dPiutang    = Number(_sb['112']) || 0;
-			var dHutang     = -(Number(_sb['211']) || 0);   // normal kredit
+			var dHutang     = Math.abs(Number(_sb['211']) || 0);
 			var dPersediaan = Number(_sb['113']) || 0;
 			var dBank       = Number(_sb['115']) || 0;
 			var dTransit    = Number(_sb['116']) || 0;
