@@ -41,22 +41,22 @@
       },
 
       // ── INIT DATA ──
-      async getInitialData() {
-        const sb = window.supabaseClient;
-        console.log('[Shim] Fetching getInitialData...');
-        
-        try {
+      getInitialData(_token) {
+        dispatch((async () => {
+          const sb = window.supabaseClient;
+          console.log('[Shim] Fetching getInitialData...');
+          
           const { data: { user }, error: authErr } = await sb.auth.getUser();
           if (authErr || !user) throw new Error('Not authenticated');
-
+        
           const sevenDaysAgo = new Date();
           sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
           const since = sevenDaysAgo.toISOString();
           const today = new Date().toISOString().split('T')[0];
-
+        
           console.log('[Shim] Executing Promise.all queries...');
-
-          // Tambahkan timeout 15 detik agar tidak menggantung selamanya
+          
+          // Timeout 15 detik agar tidak hang selamanya
           const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Timeout: Supabase query hang')), 15000)
           );
@@ -75,20 +75,20 @@
             sb.from('purchases').select('id, id_produk, nama_produk, qty, harga_beli, total_biaya, tanggal, supplier, metode, ref_nota, shift_id').gte('tanggal', since).order('tanggal', { ascending: false }).limit(300),
             sb.from('layanan_digital').select('id, tanggal, kasir, jenis, nominal, modal, fee, metode, keterangan, shift_id').gte('tanggal', since).order('tanggal', { ascending: false }).limit(300)
           ]);
-
-          // Jalankan dengan timeout
+        
           const results = await Promise.race([dataPromise, timeoutPromise]);
-
+        
           const [
             profileRes, settingsRes, productsRes, shiftRes, onlineOrdersRes, asetRes,
             dashboardRes, recentTxRes, recentJournalsRes, recentExpensesRes, recentPurchasesRes, recentLayananRes
           ] = results;
-
+        
           const errors = results.filter(r => r && r.error);
           if (errors.length) console.warn('[Shim] Query warnings:', errors.map(e => e.error));
-
+        
           console.log('[Shim] Data fetched successfully.');
           return {
+            success: true, // ← WAJIB ADA AGAR app.js TIDAK FORCE LOGOUT
             profile:         profileRes?.data || null,
             settings:        settingsRes?.data || [],
             products:        productsRes?.data || [],
@@ -104,10 +104,8 @@
             _journalsFullLoaded: false,
             _transactionsFullLoaded: false
           };
-        } catch (err) {
-          console.error('[Shim] Fatal Error in getInitialData:', err);
-          throw err; // Lempar ke failureHandler di app.js
-        }
+        })());
+        return runner;
       },
       
       async loadAllJournals(p_from, p_to) {
