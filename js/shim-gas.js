@@ -41,81 +41,126 @@
       },
 
       // ── INIT DATA ──
-      getInitialData() {
-        dispatch((async () => {
-          const { data: { user } } = await supabaseClient.auth.getUser();
-          if (!user) return { success: false, error: 'UNAUTHORIZED' };
-
-          const [ profile, settings, products, transactions, purchases, journals, expenses, layanan, bku, shifts, aset, logs, users, oo, ph ] = await Promise.all([
-            supabaseClient.from('profiles').select('*').eq('id', user.id).single(),
-            supabaseClient.from('settings').select('*'),
-            supabaseClient.from('products').select('*').eq('is_deleted', false).order('nama'),
-            supabaseClient.from('transactions').select('*').order('tanggal', {ascending:false}).limit(5000),
-            supabaseClient.from('purchases').select('*').order('tanggal', {ascending:false}).limit(5000),
-            supabaseClient.from('journals').select('*').order('tanggal', {ascending:false}).limit(20000),
-            supabaseClient.from('expenses').select('*').order('tanggal', {ascending:false}).limit(5000),
-            supabaseClient.from('layanan_digital').select('*').order('tanggal', {ascending:false}).limit(5000),
-            supabaseClient.from('bku').select('*').order('tanggal', {ascending:false}).limit(5000),
-            supabaseClient.from('shifts').select('*').eq('kasir_id', user.id).eq('status', 'OPEN').order('waktu_buka',{ascending:false}).limit(1),
-            supabaseClient.from('aset_tetap').select('*'),
-            supabaseClient.from('logs').select('*').order('waktu',{ascending:false}).limit(200),
-            supabaseClient.from('profiles').select('id,username,nama,role,is_active'),
-            supabaseClient.from('online_orders').select('*').eq('status', 'PENDING').order('tanggal',{ascending:false}),
-            supabaseClient.from('pembayaran_hutang').select('*')
-          ]);
-
-          const setup = {};
-          (settings.data || []).forEach(s => { setup[s.key] = s.value; });
-
-          const pData = profile.data || {};
-          const userObj = { 
-            nama: pData.nama || 'Admin', 
-            role: pData.role || 'Admin', 
-            username: pData.username || user.email.split('@')[0] 
-          };
-
-          const mapProd = p => ({ id: p.id, nama: p.nama, kategori: p.kategori, hargaBeli: +p.harga_beli, hargaJual: +p.harga_jual, stok: p.stok, image: p.image, jualOnline: p.jual_online });
-          const mapTrx = t => ({ id: t.id, tanggal: new Date(t.tanggal).getTime(), kasir: t.kasir, pelanggan: t.pelanggan, wa: t.wa, item: t.item_desc, total: +t.total, modal: +t.modal, laba: +t.laba, diskon: +t.diskon, metode: t.metode, bayar: +t.bayar, kembali: +t.kembali, status: t.status, cartJson: JSON.stringify(t.cart_json), pdfLink: t.pdf_link });
-          const mapPur = p => ({ id: p.id, idProduk: p.id_produk, namaProduk: p.nama_produk, qty: p.qty, hargaBeli: +p.harga_beli, totalBiaya: +p.total_biaya, tanggal: new Date(p.tanggal).getTime(), supplier: p.supplier, metode: p.metode, refNota: p.ref_nota, kasir: p.kasir });
-          const mapJurnal = j => ({ idJurnal: j.id_jurnal, tanggal: new Date(j.tanggal).getTime(), refId: j.ref_id, keterangan: j.keterangan, kodeAkun: j.kode_akun, namaAkun: j.nama_akun, debit: +j.debit, kredit: +j.kredit });
-          const mapBeban = e => ({ id: e.id, tanggal: new Date(e.tanggal).getTime(), kasir: e.kasir, kategori: e.kategori, keterangan: e.keterangan, nominal: +e.nominal });
-          const mapLay = l => ({ id: l.id, tanggal: new Date(l.tanggal).getTime(), kasir: l.kasir, jenis: l.jenis, nominal: +l.nominal, modal: +l.modal, fee: +l.fee, metode: l.metode, keterangan: l.keterangan });
-          const mapBku = b => ({ id: b.id, tanggal: new Date(b.tanggal).getTime(), noBukti: b.no_bukti, jenis: b.jenis, kategori: b.kategori, uraian: b.uraian, metode: b.metode, debit: +b.debit, kredit: +b.kredit, kasir: b.kasir });
-          const mapOO = o => ({ orderId: o.order_id, nama: o.nama, wa: o.wa, waktuAmbil: o.waktu_ambil, total: +o.total, cart: o.cart, metode: o.metode, tanggal: new Date(o.tanggal).getTime() });
-          const mapLog = l => ({ id: l.id, waktu: new Date(l.waktu).getTime(), user: l.user, aksi: l.aksi, keterangan: l.keterangan });
-          const mapPH = p => ({ id: p.id, refNota: p.ref_nota, tanggal: new Date(p.tanggal).getTime(), nominal: +p.nominal, metode: p.metode, kasir: p.kasir, keterangan: p.keterangan });
-          const mapAset = a => ({ idAset: a.id_aset, nama: a.nama, kategori: a.kategori, tanggalPerolehan: new Date(a.tanggal_perolehan).getTime(), nilaiPerolehan: +a.nilai_perolehan, nilaiResidu: +a.nilai_residu, masaManfaat: a.masa_manfaat, akumPenyusutan: +a.akum_penyusutan, nbv: (+a.nilai_perolehan) - (+a.akum_penyusutan), lokasi: a.lokasi, keterangan: a.keterangan, sumberDana: a.sumber_dana, status: a.status });
-
-          const currentShift = shifts.data[0] ? { id: shifts.data[0].id, modalAwal: +shifts.data[0].modal_awal, waktuBuka: new Date(shifts.data[0].waktu_buka).getTime() } : null;
-
-          const saldo = { kas111:0, bank115:0, piutang112:0, hutang211:0 };
-          (journals.data || []).forEach(j => {
-            const k = j.kode_akun;
-            if (k === '111') saldo.kas111    += (+j.debit - +j.kredit);
-            if (k === '115') saldo.bank115   += (+j.debit - +j.kredit);
-            if (k === '112') saldo.piutang112+= (+j.debit - +j.kredit);
-            if (k === '211') saldo.hutang211 += (+j.kredit - +j.debit);
+      // getInitialData — versi optimized
+      // Prinsip: load ringan dulu, lazy load data besar
+      async function getInitialData() {
+        const sb = window.supabaseClient;
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+      
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const since = sevenDaysAgo.toISOString();
+        const today = new Date().toISOString().split('T')[0];
+      
+        // Load paralel — semua query KECIL & WAJIB
+        const [
+          profileRes,
+          settingsRes,
+          productsRes,
+          shiftRes,
+          onlineOrdersRes,
+          asetRes,
+          dashboardRes,
+          recentTxRes,
+          recentJournalsRes,
+          recentExpensesRes,
+          recentPurchasesRes,
+          recentLayananRes
+        ] = await Promise.all([
+          sb.from('profiles').select('id, username, nama, role, is_active').eq('id', user.id).single(),
+          sb.from('settings').select('key, value'),
+          sb.from('products').select('id, nama, kategori, harga_beli, harga_jual, stok, image, jual_online')
+            .eq('is_deleted', false).order('nama'),
+          sb.from('shifts')
+            .select('id, kasir_id, kasir_nama, modal_awal, modal_source, waktu_buka, status')
+            .eq('kasir_id', user.id).eq('status', 'OPEN').maybeSingle(),
+          sb.from('online_orders')
+            .select('order_id, nama, wa, waktu_ambil, total, cart, metode, tanggal, status')
+            .eq('status', 'PENDING').order('tanggal', { ascending: false }).limit(100),
+          sb.from('aset_tetap')
+            .select('id_aset, nama, kategori, tanggal_perolehan, nilai_perolehan, nilai_residu, masa_manfaat, akum_penyusutan, lokasi, status')
+            .eq('status', 'AKTIF'),
+          sb.rpc('get_dashboard_summary', { p_tanggal: today }),
+          // Riwayat ringkas 7 hari terakhir saja (bukan 5000 baris full)
+          sb.from('transactions')
+            .select('id, tanggal, kasir, pelanggan, total, modal, laba, diskon, metode, status, shift_id')
+            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(500),
+          sb.from('journals')
+            .select('id, id_jurnal, tanggal, ref_id, keterangan, kode_akun, nama_akun, debit, kredit, shift_id')
+            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(1000),
+          sb.from('expenses')
+            .select('id, tanggal, kasir, kategori, keterangan, nominal, shift_id')
+            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(300),
+          sb.from('purchases')
+            .select('id, id_produk, nama_produk, qty, harga_beli, total_biaya, tanggal, supplier, metode, ref_nota, shift_id')
+            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(300),
+          sb.from('layanan_digital')
+            .select('id, tanggal, kasir, jenis, nominal, modal, fee, metode, keterangan, shift_id')
+            .gte('tanggal', since).order('tanggal', { ascending: false }).limit(300)
+        ]);
+      
+        // Cek error sekali
+        const errors = [profileRes, settingsRes, productsRes, shiftRes, onlineOrdersRes, asetRes,
+                        dashboardRes, recentTxRes, recentJournalsRes, recentExpensesRes,
+                        recentPurchasesRes, recentLayananRes]
+          .filter(r => r && r.error);
+        if (errors.length) console.warn('[getInitialData] warnings:', errors.map(e => e.error));
+      
+        return {
+          profile:         profileRes.data,
+          settings:        settingsRes.data || [],
+          products:        productsRes.data || [],
+          shift:           shiftRes.data || null,
+          onlineOrders:    onlineOrdersRes.data || [],
+          asetTetap:       asetRes.data || [],
+          dashboard:       dashboardRes.data || {},
+          transactions:    recentTxRes.data || [],
+          journals:        recentJournalsRes.data || [],
+          expenses:        recentExpensesRes.data || [],
+          purchases:       recentPurchasesRes.data || [],
+          layananDigital:  recentLayananRes.data || [],
+          // Flags untuk lazy loader
+          _journalsFullLoaded: false,
+          _transactionsFullLoaded: false
+        };
+      }
+      
+      // ============================================================
+      // Lazy loader: panggil saat user buka menu laporan/riwayat penuh
+      // ============================================================
+      async function loadAllJournals(p_from, p_to) {
+        const sb = window.supabaseClient;
+        const PAGE = 1000;
+        let all = [];
+        let offset = 0;
+        while (true) {
+          const { data, error } = await sb.rpc('get_journals_paginated', {
+            p_offset: offset,
+            p_limit:  PAGE,
+            p_from:    p_from || null,
+            p_to:      p_to   || null
           });
-
-          return {
-            success: true, user: userObj, setup,
-            products: (products.data||[]).map(mapProd),
-            transactions: (transactions.data||[]).map(mapTrx),
-            purchases: (purchases.data||[]).map(mapPur),
-            jurnal: (journals.data||[]).map(mapJurnal),
-            beban: (expenses.data||[]).map(mapBeban),
-            layananDigital: (layanan.data||[]).map(mapLay),
-            bku: (bku.data||[]).map(mapBku),
-            onlineOrders: (oo.data||[]).map(mapOO),
-            logs: (logs.data||[]).map(mapLog),
-            users: (users.data||[]).filter(u=>u.is_active).map(u=>({username:u.username,nama:u.nama,role:u.role})),
-            currentShift, saldoRingkas: saldo,
-            pembayaranHutang: (ph.data||[]).map(mapPH),
-            asetTetap: (aset.data||[]).map(mapAset)
-          };
-        })());
-        return runner;
-      },
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          all = all.concat(data);
+          if (data.length < PAGE) break;
+          offset += PAGE;
+          // safety stop
+          if (offset > 200000) break;
+        }
+        return all;
+      }
+      
+      // Paginated fetch (untuk infinite scroll)
+      async function loadJournalsPage({ offset = 0, limit = 100, from, to } = {}) {
+        const sb = window.supabaseClient;
+        const { data, error } = await sb.rpc('get_journals_paginated', {
+          p_offset: offset, p_limit: limit, p_from: from || null, p_to: to || null
+        });
+        if (error) throw error;
+        return { rows: data || [], total: data?.[0]?.total_count ?? 0 };
+      }
 
       getDataSince(_token, _since) {
         dispatch((async () => {
