@@ -620,7 +620,7 @@
             });
         }
 
-		    function cancelOnlineOrderAction(orderId) {
+		function cancelOnlineOrderAction(orderId) {
             var token = storageManager.get('pos_token_final');
             Swal.fire({
                 title: 'Batalkan Pesanan?',
@@ -1304,11 +1304,178 @@
             return btn;
         }
 
-        function initApp(data) {
-            try {
-                // [FIX #1] Set state DULU sebelum apapun
-                window._lastSyncTime = Date.now();
-                state.products = data.products || []; 
+		// ═══════════════════════════════════════════════════════════════
+		// [PATCH v7.20] ADAPTER — Normalisasi output shim baru ke shape lama
+		// Supaya semua kode lama (initApp, manualSync, render*) tidak perlu diubah.
+		// ═══════════════════════════════════════════════════════════════
+		function _normalizeInitialData(res) {
+		    if (!res) return null;
+		
+		    // 1. Konversi settings (array of {key, value}) → objek
+		    var setupObj = {};
+		    if (res.setup && typeof res.setup === 'object' && !Array.isArray(res.setup)) {
+		        setupObj = res.setup;
+		    } else if (Array.isArray(res.settings)) {
+		        for (var i = 0; i < res.settings.length; i++) {
+		            var s = res.settings[i];
+		            if (s && s.key !== undefined) setupObj[s.key] = s.value;
+		        }
+		    }
+		
+		    // 2. Konversi profil Supabase → shape state.user lama
+		    var u = res.profile || res.user || null;
+		    var userMapped = null;
+		    if (u) {
+		        userMapped = {
+		            id:       u.id,
+		            username: u.username,
+		            nama:     u.nama,
+		            role:     u.role,
+		            is_active:u.is_active
+		        };
+		    }
+		
+		    return {
+		        // ─── Field langsung (sama nama) ───
+		        products:       res.products || [],
+		        transactions:   res.transactions || [],
+		        purchases:      res.purchases || [],
+		        onlineOrders:   res.onlineOrders || [],
+		        layananDigital: res.layananDigital || [],
+		        asetTetap:      res.asetTetap || [],
+		        dashboard:      res.dashboard || {},
+		        currentShift:   res.shift || res.currentShift || null,
+		
+		        // ─── Field yang di-rename ───
+		        user:  userMapped,
+		        setup: setupObj,
+		        jurnal: res.journals || res.jurnal || [],
+		        beban:  res.expenses || res.beban  || [],
+		
+		        // ─── Field yang mungkin belum dikirim shim (fallback) ───
+		        logs:             res.logs             || [],
+		        users:            res.users            || [],
+		        bku:              res.bku              || [],
+		        pembayaranHutang: res.pembayaranHutang || [],
+		        saldoRingkas:     res.saldoRingkas     || { kas111: 0, bank115: 0, piutang112: 0, hutang211: 0 },
+		
+		        // ─── Flag kompatibilitas ───
+		        success: true,
+		        deltaSync: false,
+		        _journalsFullLoaded: res._journalsFullLoaded || false,
+		        _transactionsFullLoaded: res._transactionsFullLoaded || false
+		    };
+		}
+
+		var _suppFetchInProgress = false;
+		var _suppFetchLastRun    = 0;
+		
+		function _loadSupplementaryData() {
+		    if (_suppFetchInProgress) return;
+		    if (Date.now() - _suppFetchLastRun < 8000) return;   // debounce 8 detik
+		    var sb = window.supabaseClient;
+		    if (!sb) return;
+		
+		    _suppFetchInProgress = true;
+		    _suppFetchLastRun = Date.now();
+		
+		    var since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+		
+		    Promise.all([
+		        // Logs: 200 terbaru
+		        sb.from('logs')
+		          .select('id, waktu, user, aksi, keterangan')
+		          .order('waktu', { ascending: false })
+		          .limit(200),
+		        // BKU: 30 hari terakhir
+		        sb.from('bku')
+		          .select('id, tanggal, no_bukti, jenis, kategori, uraian, metode, debit, kredit, kasir')
+		          .gte('tanggal', since30)
+		          .order('tanggal', { ascending: false })
+		          .limit(500),
+		        // Pembayaran hutang: 500 terbaru
+		        sb.from('pembayaran_hutang')
+		          .select('id, ref_nota, tanggal, nominal, metode, kasir, keterangan')
+		          .order('tanggal', { ascending: false })
+		          .limit(500),
+		        // Users (admin only, tapi aman kalau 403)
+		        sb.from('profiles')
+		          .select('id, username, nama, role, is_active')
+		    ]).then(function(results) {
+		        var logsRes = results[0], bkuRes = results[1], payRes = results[2], usrRes = results[3];
+		
+		        if (!logsRes.error && logsRes.data) {
+		            state.logs = logsRes.data.map(function(l) {
+		                return {
+		                    id: l.id, waktu: new Date(l.waktu).getTime(),
+		                    user: l.user, aksi: l.aksi, keterangan: l.keterangan
+		                };
+		            });
+		        }
+		        if (!bkuRes.error && bkuRes.data) {
+		            state.bku = bkuRes.data.map(function(b) {
+		                return {
+		                    id: b.id, tanggal: new Date(b.tanggal).getTime(),
+		                    noBukti: b.no_bukti, jenis: b.jenis, kategori: b.kategori,
+		                    uraian: b.uraian, metode: b.metode,
+		                    debit: +b.debit, kredit: +b.kredit, kasir: b.kasir
+		                };
+		            });
+		        }
+		        if (!payRes.error && payRes.data) {
+		            state.pembayaranHutang = payRes.data.map(function(p) {
+		                return {
+		                    id: p.id, refNota: p.ref_nota,
+		                    tanggal: new Date(p.tanggal).getTime(),
+		                    nominal: +p.nominal, metode: p.metode,
+		                    kasir: p.kasir, keterangan: p.keterangan
+		                };
+		            });
+		        }
+		        if (!usrRes.error && usrRes.data) {
+		            state.users = usrRes.data;
+		        }
+		
+		        // Re-render view aktif kalau relevan
+		        var activePanel = document.querySelector('.view-panel:not(.hidden)');
+		        var v = activePanel ? activePanel.id : '';
+		        try { if (v === 'view-logs') renderLogs(); } catch(e) {}
+		        try { if (v === 'view-bku') renderBku(); } catch(e) {}
+		        try { if (v === 'view-setup') renderUsersList(); } catch(e) {}
+		        try { if (v === 'view-reports') renderHutang(); } catch(e) {}
+		    }).catch(function(err) {
+		        console.warn('[Supplementary] Fetch warn:', err);
+		    }).then(function() {
+		        _suppFetchInProgress = false;
+		    });
+		}
+		
+		function _loadSaldoRingkas() {
+		    var sb = window.supabaseClient;
+		    if (!sb) return;
+		    sb.rpc('get_saldo_ringkas').then(function(r) {
+		        if (!r.error && r.data) {
+		            state.saldoRingkas = r.data;
+		            // Simpan cache akun kumulatif untuk fallback render
+		            if (r.data._by_account) {
+		                state._saldoByAccount = r.data._by_account;
+		            }
+		        }
+		    }).catch(function(){});
+		}
+
+        function initApp(rawData) {
+		    try {
+		        // [PATCH v7.20] Normalisasi dulu!
+		        var data = _normalizeInitialData(rawData);
+		        if (!data) {
+		            document.getElementById('initial-loader').style.display = 'none';
+		            Swal.fire('Data Kosong', 'Server tidak mengembalikan data. Coba reload.', 'error');
+		            return;
+		        }
+		        // Set state DULU sebelum apapun
+		        window._lastSyncTime = Date.now();
+		        state.products = data.products || []; 
                 state.transactions = data.transactions || []; 
                 state.purchases = data.purchases || []; 
                 state.setup = data.setup || {}; 
@@ -1420,6 +1587,8 @@
                 
                 // [FIX #5] Log untuk debugging
                 console.log('[initApp] ✓ Selesai init. Role:', state.user.role);
+				_loadSupplementaryData();
+                _loadSaldoRingkas();
                 
             } catch (err) {
                 console.error("InitApp Error: ", err);
@@ -1465,128 +1634,31 @@
             var isFirstSync = (window._lastSyncTime === 0);
             var useFull = forceFullSync || isFirstSync;
 
-            var successHandler = function(res) {
+            var successHandler = function(rawRes) {
               window._syncInProgress = false;
-                if (!res) {
+                if (!rawRes) {
                     dot.className = 'w-2 h-2 md:w-2.5 md:h-2.5 rounded-full bg-red-500';
                     document.getElementById('sync-text').innerText = 'No Response';
                     return;
                 }
-                if (res.error === "UNAUTHORIZED") return forceLogout();
-                if (!res.success) {
+                if (rawRes.error === "UNAUTHORIZED") return forceLogout();
+
+                // [PATCH v7.20] Normalisasi — shim baru tidak kirim field success
+                var res = _normalizeInitialData(rawRes);
+                if (!res) {
                     dot.className = 'w-2 h-2 md:w-2.5 md:h-2.5 rounded-full bg-red-500';
-                    document.getElementById('sync-text').innerText = 'Error';
+                    document.getElementById('sync-text').innerText = 'Invalid';
                     return;
                 }
 
                 // === MERGE STATE ===
-                // Produk selalu REPLACE (full load dari backend)
                 state.products = res.products || state.products;
-
-                if (res.deltaSync) {
-                    // Delta mode: APPEND data baru, jangan replace
-                    // Kita gabungkan by id supaya tidak duplikat (misal data muncul di 2 sync)
-                    function mergeById(existing, incoming, idKey) {
-                      if (!incoming || incoming.length === 0) return existing;
-                      var byId = new Map();
-                      var existingIds = new Set();
-                      for (var e = 0; e < existing.length; e++) {
-                        existingIds.add(String(existing[e][idKey]));
-                      }
-                      for (var i = 0; i < incoming.length; i++) {
-                        byId.set(String(incoming[i][idKey]), incoming[i]);
-                      }
-                      var result = [];
-                      // Baru muncul di incoming saja → taruh di depan
-                      for (var k = 0; k < incoming.length; k++) {
-                        if (!existingIds.has(String(incoming[k][idKey]))) {
-                          result.push(incoming[k]);
-                        }
-                      }
-                      // Existing in order (dengan nilai baru dari incoming jika ada)
-                      for (var m = 0; m < existing.length; m++) {
-                        var id = String(existing[m][idKey]);
-                        result.push(byId.has(id) ? byId.get(id) : existing[m]);
-                      }
-                      return result;
-                    }
-
-                    state.transactions = mergeById(state.transactions, res.transactions || [], 'id');
-                    // [PATCH v7.19 #1] Rekonsiliasi kasbon: kalau count HUTANG lokal > count di response,
-                    // berarti ada yang sudah dilunasi di device lain → force full sync.
-                    if (res.deltaSync) {
-                      var localHutangCount = state.transactions.filter(function(t){ return t.status === 'HUTANG'; }).length;
-                      var serverHutangIds = (res.transactions || [])
-                          .filter(function(t){ return t.status === 'HUTANG'; })
-                          .map(function(t){ return t.id; });
-                      // Cek: apakah ada HUTANG lokal yang tidak ada di server response?
-                      var adaYangHilang = false;
-                      for (var rh = 0; rh < state.transactions.length; rh++) {
-                        var th = state.transactions[rh];
-                        if (th.status === 'HUTANG' && serverHutangIds.indexOf(th.id) === -1) {
-                          // HUTANG di lokal tidak ada di server → kemungkinan sudah dilunasi.
-                          // Tapi server juga harus kirim (karena mutable). Kalau tidak, ada gap.
-                          // Force full sync sekali.
-                          adaYangHilang = true;
-                          break;
-                        }
-                      }
-                      if (adaYangHilang) {
-                        console.warn('[DeltaSync] Gap terdeteksi pada HUTANG, fallback ke full sync...');
-                        setTimeout(function() { manualSync(true); }, 500);
-                        return;
-                      }
-                    }
-                    // [FIX] Rekonsiliasi yang sama untuk purchases Hutang → LUNAS
-                    var localHutangPurchases = state.purchases
-                        .filter(function(p){ return String(p.metode || '').toLowerCase() === 'hutang'; })
-                        .map(function(p){ return p.id; });
-                    var serverHutangPurchases = (res.purchases || [])
-                        .filter(function(p){ return String(p.metode || '').toLowerCase() === 'hutang'; })
-                        .map(function(p){ return p.id; });
-
-                    var adaPurchHilang = false;
-                    for (var rp = 0; rp < localHutangPurchases.length; rp++) {
-                        if (serverHutangPurchases.indexOf(localHutangPurchases[rp]) === -1) {
-                            adaPurchHilang = true;
-                            break;
-                        }
-                    }
-                    if (adaPurchHilang) {
-                        console.warn('[DeltaSync] Gap terdeteksi pada purchases Hutang, fallback ke full sync...');
-                        setTimeout(function() { manualSync(true); }, 500);
-                        return;
-                    }
-                    state.purchases = mergeById(state.purchases, res.purchases || [], 'id');
-                    state.beban = mergeById(state.beban, res.beban || [], 'id');
-                    state.layananDigital = mergeById(state.layananDigital, res.layananDigital || [], 'id');
-                    state.bku = mergeById(state.bku, res.bku || [], 'id');
-                    state.pembayaranHutang = mergeById(state.pembayaranHutang, res.pembayaranHutang || [], 'id');
-                    // Logs & Jurnal — pakai idJurnal
-                    state.logs = mergeById(state.logs, res.logs || [], 'id');
-                    if (res.jurnal && res.jurnal.length > 0) {
-                        var jMap = {};
-                        for (var j = 0; j < state.jurnal.length; j++) jMap[state.jurnal[j].idJurnal] = true;
-                        for (var j2 = 0; j2 < res.jurnal.length; j2++) {
-                            if (!jMap[res.jurnal[j2].idJurnal]) {
-                                state.jurnal.unshift(res.jurnal[j2]);
-                                jMap[res.jurnal[j2].idJurnal] = true;
-                            }
-                        }
-                    }
-                } else {
-                    // Full mode: replace semua
-                    state.transactions = res.transactions || [];
-                    state.purchases = res.purchases || [];
-                    state.beban = res.beban || [];
-                    state.layananDigital = res.layananDigital || [];
-                    state.logs = res.logs || [];
-                    state.jurnal = res.jurnal || [];
-                    state.bku = res.bku || [];
-                    state.pembayaranHutang = res.pembayaranHutang || [];
-                }
-
-                state.currentShift = res.currentShift;
+                state.transactions   = res.transactions   || [];
+                state.purchases      = res.purchases      || [];
+                state.beban          = res.beban          || [];
+                state.layananDigital = res.layananDigital || [];
+                state.jurnal         = res.jurnal         || [];
+                state.currentShift   = res.currentShift;
                 if (res.setup && Object.keys(res.setup).length > 0) state.setup = res.setup;
                 if (res.saldoRingkas) state.saldoRingkas = res.saldoRingkas;
 
@@ -1616,7 +1688,8 @@
                     var ss = String(nowSync.getSeconds()).padStart(2,'0');
                     syncBtn.title = 'Terakhir sync: ' + hh + ':' + mi + ':' + ss + ' • Klik untuk sync paksa';
                 }
-
+				_loadSupplementaryData();
+				_loadSaldoRingkas();
                 // Update tombol shift
                 syncShiftButtonVisibility();
                 updateSidebarShiftInfo();
@@ -1820,7 +1893,16 @@
             
             // Render view
             if(id === 'dashboard') renderDashboard();
-            if(id === 'reports') { renderAllReports(); renderReportSummary(); }
+			if(id === 'reports') { renderAllReports(); renderReportSummary(); }
+            if (id === 'logs' && (!state.logs || state.logs.length === 0)) {
+                _loadSupplementaryData();
+            }
+            if (id === 'bku' && (!state.bku || state.bku.length === 0)) {
+                _loadSupplementaryData();
+            }
+            if (id === 'setup' && (!state.users || state.users.length === 0)) {
+                _loadSupplementaryData();
+            }
             if(id === 'logs') renderLogs();
             if(id === 'layanan') renderLayananView();
             if(id === 'bku') renderBku();
@@ -9976,18 +10058,11 @@
         // Fallback ke state.jurnal (Admin) atau 0 (Kasir tanpa data).
         var isAdmin = !!(state.user && state.user.role === 'Admin');
         var saldoKas;
-        if (isAdmin && state.jurnal && state.jurnal.length > 0) {
-            // Admin: hitung dari jurnal penuh (akurat 100%)
-            saldoKas = 0;
-            for (var i = 0; i < state.jurnal.length; i++) {
-                if (String(state.jurnal[i].kodeAkun).trim() === '111') {
-                    saldoKas += (state.jurnal[i].debit || 0) - (state.jurnal[i].kredit || 0);
-                }
-            }
-        } else {
-            // Kasir: gunakan saldoRingkas dari server
-            saldoKas = (state.saldoRingkas && Number(state.saldoRingkas.kas111)) || 0;
-        }
+        // Prioritas: cache RPC > state.jurnal > 0
+		var saldoKas =
+		    (state._saldoByAccount && Number(state._saldoByAccount['111'])) ||
+		    (state.saldoRingkas && Number(state.saldoRingkas.kas111)) ||
+		    0;
         
         var fee = hitungFeeTarikTunaiJS(uangFisik);
         var minimalKas = (metodeBayar === 'SPLIT') ? Math.max(0, uangFisik - fee) : uangFisik;
@@ -12125,6 +12200,9 @@
                 renderHutang();
                 renderLaporanLainSetelahPembayaran();
                 manualSync(true);
+				_suppFetchLastRun = 0;
+                _loadSupplementaryData();
+				_loadSaldoRingkas();
             }).withFailureHandler(function(err) {
                 Swal.fire('Koneksi Gagal', err && err.message ? err.message : 'unknown', 'error');
             }).savePembayaranHutang(storageManager.get('pos_token_final'), {
